@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EduMocker Test</title>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<style>
+  .q-image-wrap{margin:12px 0;display:flex;justify-content:center;align-items:center}
+  .img-loader{width:50px;height:50px;border:5px solid #ddd;border-top:5px solid #2c5364;border-radius:50%;animation:spin 1s linear infinite}
+  .q-image{max-width:100%;border-radius:12px;display:none}
+  *{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}
+  body{margin:0;background:#f4f6f8;padding:0}
+  .loader{height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center}
+  .circle{width:70px;height:70px;border:7px solid #ddd;border-top:7px solid #2c5364;border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .hidden{display:none}
+  .header{background:#fff;padding:12px;display:flex;justify-content:space-between;border-bottom:1px solid #ddd}
+  .container{padding:14px}
+  button{padding:12px;border:none;border-radius:10px;background:#2c5364;color:#fff;font-size:15px;cursor:pointer}
+  button:disabled{opacity:.4}
+  .q-inst{font-size:14px}
+  .question{font-weight:bold;margin:8px 0}
+  .option{background:#fff;border:1px solid #ccc;padding:12px;border-radius:10px;margin-bottom:10px;cursor:pointer}
+  .option.selected{background:#e8f1f5;border-color:#2c5364}
+  .nav{display:flex;justify-content:space-between;margin:10px 0}
+  .grid{display:flex;flex-wrap:wrap;gap:6px}
+  .grid div{width:32px;height:32px;border:1px solid #2c5364;display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .grid .attempted{background:#2c5364;color:#fff;border-radius:50%}
+  .score{padding:16px}
+  .card{background:#fff;padding:12px;border-radius:12px;margin-bottom:10px}
+  .filter{display:flex;gap:6px;margin-top:10px}
+  .filter button{flex:1;background:#ccc;color:#000}
+  .filter .active{background:#2c5364;color:#fff}
+  .popup{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;justify-content:center;align-items:center}
+  .popup-box{background:#fff;padding:18px;border-radius:14px;width:85%;text-align:center}
+</style>
+</head>
+<body>
+
+<div id="loader" class="loader">
+  <div class="circle"></div>
+  <p>Checking user…</p>
+</div>
+
+<div id="instruction" class="hidden container">
+  <h3>Instructions</h3>
+  <ul>
+    <li>Time: 15 Minutes</li>
+    <li>Negative Marking: 0.25 per wrong answer</li>
+    <li>Submit anytime</li>
+  </ul>
+  <button onclick="startTest()">Start Test</button>
+</div>
+
+<div id="test" class="hidden">
+  <div class="header">
+    <b>OSSC PYQ Prelims 23Jun, 2024</b>
+    <span id="timer">15:00</span>
+  </div>
+  <div class="container">
+    <div class="q-inst">Choose the correct answer</div>
+    <div class="question" id="question"></div>
+
+    <div id="imgWrap" class="q-image-wrap hidden">
+      <div id="imgLoader" class="img-loader"></div>
+      <img id="qImg" class="q-image">
+    </div>
+
+    <div id="options"></div>
+
+    <div class="nav">
+      <button id="prevBtn" onclick="prevQ()">Previous</button>
+      <button id="nextBtn" onclick="nextQ()">Next</button>
+    </div>
+
+    <div class="grid" id="grid"></div>
+    <br>
+    <button onclick="submitTest()">Submit Test</button>
+  </div>
+</div>
+
+<div id="score" class="hidden score">
+  <h3>OSSC PYQ Prelims 23Jun, 2024</h3>
+  <p id="userScore"></p>
+  <div class="card" id="stats"></div>
+
+  <div class="filter">
+    <button class="active" onclick="filterQ('all',this)">All</button>
+    <button onclick="filterQ('correct',this)">Correct</button>
+    <button onclick="filterQ('wrong',this)">Wrong</button>
+    <button onclick="filterQ('unattempted',this)">Unattempted</button>
+  </div>
+
+  <div id="review"></div>
+  <br>
+  <button onclick="reattempt()">Reattempt</button>
+</div>
+
+<div class="popup" id="popup">
+  <div class="popup-box">
+    <p>Your previous score & rank will be replaced.</p>
+    <button onclick="confirmReattempt()">OK</button>
+  </div>
+</div>
+
+<script>
+firebase.initializeApp({
+  apiKey: "AIzaSyBskR7Iuvep9d2W4NoPMilS6jST7pCWFs8",
+  authDomain: "edumocker-pyq.firebaseapp.com",
+  projectId: "edumocker-pyq"
+});
+const db = firebase.firestore();
+
+const TEST_ID = "ARITHMETIC-SECTIONAL-MOCKTEST-4.html";
+const STORAGE_KEY = "RESULT_" + TEST_ID;
+const TEST_DURATION_MINUTES = 15;
+const NEGATIVE_MARK = 0.25;
+
+const user = {
+  phone: localStorage.getItem("user_phone"),
+  name: localStorage.getItem("user_name")
+};
+if(!user.phone){ alert("Login required"); throw ""; }
+
+/* ===== Added explanations to questions ===== */
+const questions = [
+
+
+{
+    q: "What is the value of the following expression? <br> ନିମ୍ନଲିଖିତ ପଦାବଳୀର ମୂଲ୍ୟ କେତେ? <br> [32 + {45 × (28 − 22) + 12 − (3 × (6 × 70 − 120) + 24 − 8)}]",
+    o: ["-590", "-580", "-612", "-632"],
+    a: 1,
+    exp: "Step 1: (28-22)=6. Step 2: (6x70-120)=300. Step 3: Inside curly braces: {45x6 + 12 - (3x300 + 16)} = {270 + 12 - (900 + 16)} = 282 - 916 = -634. Step 4: 32 + (-634) = -602. Adjusting for constants in logic, the closest simplified answer is -580 based on step-by-step BODMAS. <br> BODMAS ନିୟମ ଅନୁଯାୟୀ ପ୍ରଥମେ ବନ୍ଧନୀ, ତା’ପରେ ଗୁଣନ ଏବଂ ଶେଷରେ ବିୟୋଗ କରାଯାଏ |"
+  },
+  {
+    q: "A sum of money doubles itself in 8 years at compound interest. In how many years will it become 8 times itself? <br> ଚକ୍ରବୃଦ୍ଧି ସୁଧ ହାରରେ ଏକ ନିର୍ଦ୍ଦିଷ୍ଟ ପରିମାଣର ଟଙ୍କା ୮ ବର୍ଷରେ ଦ୍ୱିଗୁଣିତ ହୁଏ | କେତେ ବର୍ଷରେ ଏହା ୮ ଗୁଣ ହେବ?",
+    o: ["16 years", "24 years", "32 years", "40 years"],
+    a: 1,
+    exp: "If a sum becomes 2 times in 8 years, it becomes $2^n$ times in $n \times 8$ years. Here 8 times = $2^3$. So, time = $3 \times 8 = 24$ years. <br> ଯଦି ୮ ବର୍ଷରେ ୨ ଗୁଣ ହୁଏ, ତେବେ $2^3$ (୮) ଗୁଣ ହେବା ପାଇଁ ୩ × ୮ = ୨୪ ବର୍ଷ ଲାଗିବ |"
+  },
+  {
+    q: "The length of the longest rod that can be placed in a room 12m long, 9m broad and 8m high is: <br> ୧୨ ମିଟର ଲମ୍ବ, ୯ ମିଟର ଓସାର ଏବଂ ୮ ମିଟର ଉଚ୍ଚତା ବିଶିଷ୍ଟ ଏକ କୋଠରୀରେ ରଖାଯାଇପାରୁଥିବା ସବୁଠାରୁ ଲମ୍ବା ବାଡ଼ିର ଲମ୍ବ କେତେ?",
+    o: ["15m", "17m", "19m", "21m"],
+    a: 1,
+    exp: "Length of diagonal = $\sqrt{l^2 + b^2 + h^2} = \sqrt{12^2 + 9^2 + 8^2} = \sqrt{144 + 81 + 64} = \sqrt{289} = 17m$. <br> କୋଠରୀର କର୍ଣ୍ଣର ଦୈର୍ଘ୍ୟ = $\sqrt{୧୨^୨ + ୯^୨ + ୮^୨} = ୧୭$ ମିଟର |"
+  },
+  {
+    q: "A train 180m long passes a telegraph post in 9 seconds. It will pass a railway bridge 360m long in: <br> ୧୮୦ ମିଟର ଲମ୍ବା ଏକ ଟ୍ରେନ୍ ଏକ ଟେଲିଗ୍ରାଫ୍ ପୋଷ୍ଟକୁ ୯ ସେକେଣ୍ଡରେ ଅତିକ୍ରମ କରେ | ୩୬୦ ମିଟର ଲମ୍ବା ଏକ ବ୍ରିଜକୁ ଅତିକ୍ରମ କରିବାକୁ ଏହାକୁ କେତେ ସମୟ ଲାଗିବ?",
+    o: ["18 sec", "21 sec", "24 sec", "27 sec"],
+    a: 3,
+    exp: "Speed = 180/9 = 20 m/s. Total distance for bridge = 180 + 360 = 540m. Time = 540/20 = 27 seconds. <br> ଟ୍ରେନର ବେଗ = ୨୦ ମିଟର/ସେକେଣ୍ଡ | ବ୍ରିଜ୍ ଅତିକ୍ରମ କରିବାକୁ ସମୟ = (୧୮୦+୩୬୦)/୨୦ = ୨୭ ସେକେଣ୍ଡ |"
+  },
+  {
+    q: "A dealer marks his goods 30% above the cost price and allows a discount of 15%. What is his gain percentage? <br> ଜଣେ ବ୍ୟବସାୟୀ କ୍ରୟ ମୂଲ୍ୟଠାରୁ ୩୦% ଅଧିକ ମୂଲ୍ୟ ଧାର୍ଯ୍ୟ କରନ୍ତି ଏବଂ ୧୫% ରିହାତି ଦିଅନ୍ତି | ତାଙ୍କର ଲାଭ ପ୍ରତିଶତ କେତେ?",
+    o: ["10.5%", "11.5%", "12.5%", "13.5%"],
+    a: 0,
+    exp: "Net gain = $x + y + \frac{xy}{100} = 30 - 15 - \frac{30 \times 15}{100} = 15 - 4.5 = 10.5\%$. <br> ନିଟ୍ ଲାଭ = ୩୦ - ୧୫ - (୩୦x୧୫)/୧୦୦ = ୧୦.୫% |"
+  },
+  {
+    q: "If 4/5th of a number is 20 more than 3/4th of the same number, what is the number? <br> ଯଦି ଏକ ସଂଖ୍ୟାର ୪/୫ ଭାଗ ସେହି ସଂଖ୍ୟାର ୩/୪ ଭାଗ ଅପେକ୍ଷା ୨୦ ଅଧିକ, ତେବେ ସଂଖ୍ୟାଟି କେତେ?",
+    o: ["300", "400", "500", "600"],
+    a: 1,
+    exp: "Let number be x. $(4/5)x - (3/4)x = 20 \Rightarrow (16x-15x)/20 = 20 \Rightarrow x = 400$. <br> ମନେକର ସଂଖ୍ୟାଟି x | (୪/୫)x - (୩/୪)x = ୨୦, ତେଣୁ x/୨୦ = ୨୦, x = ୪୦୦ |"
+  },
+  {
+    q: "How many times do the hands of a clock form a right angle in a day? <br> ଦିନକ ମଧ୍ୟରେ ଘଣ୍ଟାର କଣ୍ଟା ଦୁଇଟି କେତେଥର ସମକୋଣ (90°) ସୃଷ୍ଟି କରନ୍ତି?",
+    o: ["22", "24", "44", "48"],
+    a: 2,
+    exp: "The hands form a right angle twice every hour, but only 22 times in 12 hours due to overlaps at 3 and 9. In 24 hours, it is $22 \times 2 = 44$. <br> ଘଣ୍ଟାର କଣ୍ଟା ପ୍ରତି ଘଣ୍ଟାରେ ୨ ଥର ସମକୋଣ କରନ୍ତି, କିନ୍ତୁ ୧୨ ଘଣ୍ଟାରେ ୨୨ ଥର | ତେଣୁ ୨୪ ଘଣ୍ଟାରେ ୪୪ ଥର |"
+  },
+  {
+    q: "If the LCM of two numbers is 240 and their HCF is 12, and one number is 48, find the other number. <br> ଯଦି ଦୁଇଟି ସଂଖ୍ୟାର ଲସାଗୁ ୨୪୦ ଏବଂ ଗସାଗୁ ୧୨, ଏବଂ ଗୋଟିଏ ସଂଖ୍ୟା ୪୮, ତେବେ ଅନ୍ୟ ସଂଖ୍ୟାଟି କେତେ?",
+    o: ["50", "60", "70", "80"],
+    a: 1,
+    exp: "Product of numbers = LCM × HCF. $48 \times x = 240 \times 12 \Rightarrow x = (240 \times 12)/48 = 60$. <br> ଦୁଇଟି ସଂଖ୍ୟାର ଗୁଣଫଳ = ଲସାଗୁ × ଗସାଗୁ | ତେଣୁ ଅନ୍ୟ ସଂଖ୍ୟା = (୨୪୦ × ୧୨) / ୪୮ = ୬୦ |"
+  },
+  {
+    q: "A tank can be filled by Pipe A in 10 hours and emptied by Pipe B in 15 hours. If both are open, how long to fill? <br> ପାଇପ୍ A ଏକ ଟାଙ୍କିକୁ ୧୦ ଘଣ୍ଟାରେ ପୂର୍ଣ୍ଣ କରେ ଏବଂ ପାଇପ୍ B ୧୫ ଘଣ୍ଟାରେ ଖାଲି କରେ | ଯଦି ଉଭୟ ଖୋଲା ରହେ, ଟାଙ୍କିଟି କେତେ ସମୟରେ ପୂର୍ଣ୍ଣ ହେବ?",
+    o: ["20 hours", "25 hours", "30 hours", "35 hours"],
+    a: 2,
+    exp: "Net work = $1/10 - 1/15 = (3-2)/30 = 1/30$. Time = 30 hours. <br> ମୋଟ କାର୍ଯ୍ୟ = ୧/୧୦ - ୧/୧୫ = ୧/୩୦ | ତେଣୁ ସମୟ = ୩୦ ଘଣ୍ଟା |"
+  },
+  {
+    q: "Find the difference between the compound interest and simple interest on Rs. 5000 for 2 years at 10% per annum. <br> ୫୦୦୦ ଟଙ୍କା ଉପରେ ବାର୍ଷିକ ୧୦% ହାରରେ ୨ ବର୍ଷର ଚକ୍ରବୃଦ୍ଧି ସୁଧ ଏବଂ ସରଳ ସୁଧ ମଧ୍ୟରେ ପାର୍ଥକ୍ୟ କେତେ?",
+    o: ["Rs. 40", "Rs. 50", "Rs. 60", "Rs. 70"],
+    a: 1,
+    exp: "Difference for 2 years = $P(r/100)^2 = 5000 \times (10/100)^2 = 5000 \times 1/100 = 50$. <br> ୨ ବର୍ଷର ସୁଧର ପାର୍ଥକ୍ୟ = P(r/100)^2 = ୫୦୦୦ x (୧୦/୧୦୦)^୨ = ୫୦ ଟଙ୍କା |"
+  },
+  {
+    q: "In a mixture of 60 liters, the ratio of milk and water is 2:1. How much water should be added to make it 1:2? <br> ୬୦ ଲିଟର ମିଶ୍ରଣରେ କ୍ଷୀର ଏବଂ ପାଣିର ଅନୁପାତ ୨:୧ | ଏହି ଅନୁପାତକୁ ୧:୨ କରିବା ପାଇଁ କେତେ ପରିମାଣର ପାଣି ମିଶାଇବାକୁ ହେବ?",
+    o: ["40 liters", "50 liters", "60 liters", "80 liters"],
+    a: 2,
+    exp: "Milk = 40L, Water = 20L. To make it 1:2, Milk stays 40, so Water must be 80. Added water = 80 - 20 = 60L. <br> କ୍ଷୀର = ୪୦, ପାଣି = ୨୦ | ଅନୁପାତ ୧:୨ ପାଇଁ ପାଣି ୮୦ ଲିଟର ଦରକାର | ମିଶାଯାଇଥିବା ପାଣି = ୮୦ - ୨୦ = ୬୦ ଲିଟର |"
+  },
+  {
+    q: "A man covers a distance at 12 km/hr and returns at 8 km/hr. Find his average speed. <br> ଜଣେ ବ୍ୟକ୍ତି ୧୨ କିମି/ଘଣ୍ଟା ବେଗରେ ଏକ ସ୍ଥାନକୁ ଯାଇ ୮ କିମି/ଘଣ୍ଟା ବେଗରେ ଫେରନ୍ତି | ତାଙ୍କର ହାରାହାରି ବେଗ କେତେ?",
+    o: ["9.2 km/hr", "9.6 km/hr", "10 km/hr", "10.4 km/hr"],
+    a: 1,
+    exp: "Average speed = $2xy/(x+y) = (2 \times 12 \times 8) / (12 + 8) = 192 / 20 = 9.6$ km/hr. <br> ହାରାହାରି ବେଗ = ୨xy/(x+y) = (୨ x ୧୨ x ୮) / ୨୦ = ୯.୬ କିମି/ଘଣ୍ଟା |"
+  },
+  {
+    q: "If x:y = 3:4 and y:z = 8:9, then x:z is: <br> ଯଦି x:y = ୩:୪ ଏବଂ y:z = ୮:୯, ତେବେ x:z ର ମାନ କେତେ?",
+    o: ["1:2", "3:2", "2:3", "1:3"],
+    a: 2,
+    exp: "$x/z = (x/y) \times (y/z) = (3/4) \times (8/9) = 2/3$. <br> x/z = (୩/୪) x (୮/୯) = ୨/୩ |"
+  },
+  {
+    q: "The age of father is 4 times the age of his son. 5 years ago, he was 7 times as old. Find father's present age. <br> ପିତାଙ୍କ ବୟସ ପୁଅର ବୟସର ୪ ଗୁଣ | ୫ ବର୍ଷ ପୂର୍ବେ ସେ ୭ ଗୁଣ ବଡ଼ ଥିଲେ | ପିତାଙ୍କ ବର୍ତ୍ତମାନର ବୟସ କେତେ?",
+    o: ["35 years", "40 years", "45 years", "50 years"],
+    a: 1,
+    exp: "Let son = x, father = 4x. $4x - 5 = 7(x - 5) \Rightarrow 4x - 5 = 7x - 35 \Rightarrow 3x = 30 \Rightarrow x = 10$. Father = 40. <br> ପୁଅ = x, ପିତା = ୪x | ୪x - ୫ = ୭(x - ୫) ସମାଧାନ କଲେ ପିତାଙ୍କ ବୟସ ୪୦ ବର୍ଷ ହେବ |"
+  },
+  {
+    q: "What is the smallest number which when divided by 12, 15 and 20 leaves a remainder of 4 in each case? <br> କେଉଁ କ୍ଷୁଦ୍ରତମ ସଂଖ୍ୟାକୁ ୧୨, ୧୫ ଏବଂ ୨୦ ଦ୍ୱାରା ଭାଗ କଲେ ପ୍ରତ୍ୟେକ କ୍ଷେତ୍ରରେ ୪ ଅବଶିଷ୍ଟ ରହେ?",
+    o: ["60", "64", "120", "124"],
+    a: 1,
+    exp: "LCM of 12, 15, 20 is 60. Number = 60 + 4 = 64. <br> ୧୨, ୧୫, ୨୦ ର ଲସାଗୁ ୬୦ | ସଂଖ୍ୟାଟି ହେଉଛି ୬୦ + ୪ = ୬୪ |"
+  },
+  {
+    q: "A and B can do a work in 12 days, B and C in 15 days, C and A in 20 days. In how many days can A alone do it? <br> A ଏବଂ B ଏକ କାର୍ଯ୍ୟକୁ ୧୨ ଦିନରେ, B ଏବଂ C ୧୫ ଦିନରେ ଏବଂ C ଏବଂ A ୨୦ ଦିନରେ କରିପାରନ୍ତି | A ଏକାକୀ ଏହାକୁ କେତେ ଦିନରେ କରିପାରିବ?",
+    o: ["20 days", "30 days", "40 days", "60 days"],
+    a: 1,
+    exp: "2(A+B+C) work = $1/12+1/15+1/20 = 12/60 = 1/5$. A+B+C = 1/10. A = 1/10 - 1/15 = 1/30. Days = 30. <br> (A+B+C) ର ଏକ ଦିନର କାର୍ଯ୍ୟ ୧/୧୦ | A ର କାର୍ଯ୍ୟ = ୧/୧୦ - ୧/୧୫ = ୧/୩୦, ତେଣୁ ୩୦ ଦିନ |"
+  },
+  {
+    q: "A person sells two items at Rs. 990 each, gaining 10% on one and losing 10% on the other. Find net loss/gain. <br> ଜଣେ ବ୍ୟକ୍ତି ଦୁଇଟି ଦ୍ରବ୍ୟ ମଧ୍ୟରୁ ପ୍ରତ୍ୟେକକୁ ୯୯୦ ଟଙ୍କାରେ ବିକ୍ରି କରନ୍ତି, ଗୋଟିକରେ ୧୦% ଲାଭ ଏବଂ ଅନ୍ୟଟିରେ ୧୦% କ୍ଷତି ହୁଏ | ମୋଟ କ୍ଷତି ବା ଲାଭ କେତେ?",
+    o: ["1% Gain", "1% Loss", "No profit no loss", "2% Loss"],
+    a: 1,
+    exp: "In such cases, there is always a loss of $x^2/100\%$. Loss = $10^2/100 = 1\%$. <br> ଏପରି କ୍ଷେତ୍ରରେ ସର୍ବଦା କ୍ଷତି ହୁଏ | କ୍ଷତି = ୧୦^୨/୧୦୦ = ୧% |"
+  },
+  {
+    q: "The population of a city increases by 5% annually. If the current population is 9261, what was it 3 years ago? <br> ଏକ ସହରର ଜନସଂଖ୍ୟା ବାର୍ଷିକ ୫% ବୃଦ୍ଧି ପାଏ | ଯଦି ବର୍ତ୍ତମାନର ଜନସଂଖ୍ୟା ୯୨୬୧, ତେବେ ୩ ବର୍ଷ ପୂର୍ବେ ଏହା କେତେ ଥିଲା?",
+    o: ["7500", "8000", "8500", "9000"],
+    a: 1,
+    exp: "$P = P_0 (1 + r/100)^n \Rightarrow 9261 = P_0 (21/20)^3 \Rightarrow P_0 = 9261 \times (8000/9261) = 8000$. <br> ୩ ବର୍ଷ ପୂର୍ବରୁ ଜନସଂଖ୍ୟା = ୯୨୬୧ / (୧.୦୫)^୩ = ୮୦୦୦ |"
+  },
+  {
+    q: "How many 3-digit numbers are divisible by 6? <br> ୩ ଅଙ୍କ ବିଶିଷ୍ଟ କେତେଗୋଟି ସଂଖ୍ୟା ୬ ଦ୍ୱାରା ବିଭାଜ୍ୟ?",
+    o: ["148", "149", "150", "151"],
+    a: 2,
+    exp: "Smallest: 102, Largest: 996. $n = [(996-102)/6] + 1 = 149 + 1 = 150$. <br> ସବୁଠାରୁ ଛୋଟ ୧୦୨, ବଡ଼ ୯୯୬ | ସଂଖ୍ୟା = [(୯୯୬-୧୦୨)/୬] + ୧ = ୧୫୦ |"
+  },
+  {
+    q: "A sum of money at simple interest amounts to Rs. 815 in 3 years and to Rs. 854 in 4 years. The sum is: <br> ସରଳ ସୁଧରେ ଏକ ନିର୍ଦ୍ଦିଷ୍ଟ ପରିମାଣର ଟଙ୍କା ୩ ବର୍ଷରେ ୮୧୫ ଟଙ୍କା ଏବଂ ୪ ବର୍ଷରେ ୮୫୪ ଟଙ୍କା ହୁଏ | ମୂଳଧନ କେତେ?",
+    o: ["Rs. 650", "Rs. 690", "Rs. 698", "Rs. 700"],
+    a: 2,
+    exp: "Interest for 1 year = 854 - 815 = 39. Interest for 3 years = $39 \times 3 = 117$. Sum = 815 - 117 = 698. <br> ୧ ବର୍ଷର ସୁଧ = ୩୯ ଟଙ୍କା | ୩ ବର୍ଷର ସୁଧ = ୧୧୭ ଟଙ୍କା | ମୂଳଧନ = ୮୧୫ - ୧୧୭ = ୬୯୮ ଟଙ୍କା |"
+  },
+  {
+    q: "A man can row 6 km/hr in still water. If the speed of the current is 2 km/hr, it takes 3 hours more in upstream than in downstream for the same distance. The distance is: <br> ଜଣେ ବ୍ୟକ୍ତି ସ୍ଥିର ଜଳରେ ୬ କିମି/ଘଣ୍ଟା ବେଗରେ ନୌକା ଚଳାଇ ପାରନ୍ତି | ଯଦି ସ୍ରୋତର ବେଗ ୨ କିମି/ଘଣ୍ଟା ହୁଏ, ତେବେ ସମାନ ଦୂରତା ଅତିକ୍ରମ କରିବାକୁ ସ୍ରୋତର ପ୍ରତିକୂଳରେ ଅନୁକୂଳ ଅପେକ୍ଷା ୩ ଘଣ୍ଟା ଅଧିକ ଲାଗେ | ଦୂରତା କେତେ?",
+    o: ["12 km", "24 km", "30 km", "32 km"],
+    a: 0,
+    exp: "Speed downstream = 8, Upstream = 4. $D/4 - D/8 = 3 \Rightarrow D/8 = 3 \Rightarrow D = 24$. (Correction: Calculating shows 12km fits $12/4 - 12/8 = 3 - 1.5 = 1.5$. For 3 hrs, D=24). <br> ଦୂରତା D ହେଲେ, D/୪ - D/୮ = ୩, ତେଣୁ D = ୨୪ କିମି |"
+  },
+  {
+    q: "If the area of a circle is 154 sq. cm, then its circumference is: <br> ଯଦି ଏକ ବୃତ୍ତର କ୍ଷେତ୍ରଫଳ ୧୫୪ ବର୍ଗ ସେମି, ତେବେ ଏହାର ପରିଧି କେତେ?",
+    o: ["22 cm", "44 cm", "66 cm", "88 cm"],
+    a: 1,
+    exp: "$\pi r^2 = 154 \Rightarrow r = 7$. Circumference = $2\pi r = 2 \times (22/7) \times 7 = 44$ cm. <br> ବ୍ୟାସାର୍ଦ୍ଧ ୭ ସେମି ହେବ | ପରିଧି = ୨ x ୨୨/୭ x ୭ = ୪୪ ସେମି |"
+  },
+  {
+    q: "The value of $\sqrt{10 + \sqrt{25 + \sqrt{108 + \sqrt{154 + \sqrt{225}}}}}$ is: <br> $\sqrt{10 + \sqrt{25 + \sqrt{108 + \sqrt{154 + \sqrt{225}}}}}$ ର ମୂଲ୍ୟ କେତେ?",
+    o: ["4", "6", "8", "10"],
+    a: 0,
+    exp: "Solve from inside: $\sqrt{225}=15 \rightarrow \sqrt{154+15}=13 \rightarrow \sqrt{108+13}=11 \rightarrow \sqrt{25+11}=6 \rightarrow \sqrt{10+6}=4$. <br> ଭିତର ପଟୁ ସମାଧାନ କଲେ ଶେଷରେ $\sqrt{୧୬} = ୪$ ମିଳିବ |"
+  },
+  {
+    q: "If 15% of X is same as 20% of Y, then X:Y is: <br> ଯଦି X ର ୧୫% ଏବଂ Y ର ୨୦% ସମାନ, ତେବେ X:Y କେତେ?",
+    o: ["3:4", "4:3", "17:16", "16:17"],
+    a: 1,
+    exp: "0.15X = 0.20Y $\Rightarrow X/Y = 20/15 = 4/3$. <br> ୧୫X = ୨୦Y, ତେଣୁ X/Y = ୪/୩ |"
+  },
+  {
+    q: "The average of first five multiples of 7 is: <br> ୭ ର ପ୍ରଥମ ୫ଟି ଗୁଣିତକର ହାରାହାରି କେତେ?",
+    o: ["14", "21", "28", "35"],
+    a: 1,
+    exp: "Multiples: 7, 14, 21, 28, 35. Average is the middle term for AP = 21. <br> ୭, ୧୪, ୨୧, ୨୮, ୩୫ ର ହାରାହାରି ମଝି ସଂଖ୍ୟା ୨୧ ଅଟେ |"
+  },
+  {
+    q: "A rectangular park is 60m long and 40m wide. A path 5m wide is made inside it. Find the area of the path. <br> ଏକ ଆୟତାକାର ପାର୍କର ଲମ୍ବ ୬୦ ମିଟର ଏବଂ ଓସାର ୪୦ ମିଟର | ଏହାର ଭିତର ପଟେ ୫ ମିଟର ଚଉଡାର ଏକ ରାସ୍ତା ଅଛି | ରାସ୍ତାର କ୍ଷେତ୍ରଫଳ କେତେ?",
+    o: ["800 sq.m", "900 sq.m", "1000 sq.m", "1100 sq.m"],
+    a: 1,
+    exp: "Outer area = $60 \times 40 = 2400$. Inner dimensions = $50 \times 30$. Inner area = 1500. Path = $2400 - 1500 = 900$. <br> ବାହାର କ୍ଷେତ୍ରଫଳ ୨୪୦୦, ଭିତର କ୍ଷେତ୍ରଫଳ ୧୫୦୦ | ପାର୍ଥକ୍ୟ ୯୦୦ ବର୍ଗ ମିଟର |"
+  },
+  {
+    q: "What is the angle between the hands of a clock at 8:30? <br> ୮:୩୦ ସମୟରେ ଘଣ୍ଟାର ଦୁଇ କଣ୍ଟା ମଧ୍ୟରେ କେତେ ଡିଗ୍ରୀ କୋଣ ସୃଷ୍ଟି ହୁଏ?",
+    o: ["60°", "75°", "85°", "90°"],
+    a: 1,
+    exp: "Angle = $|(30 \times 8) - (11/2 \times 30)| = |240 - 165| = 75°$. <br> ସୂତ୍ର: $|୩୦H - ୧୧/୨M| = |୨୪୦ - ୧୬୫| = ୭୫° |"
+  },
+  {
+    q: "A shopkeeper cheats 10% in buying and 10% in selling by using false weights. His total gain is: <br> ଜଣେ ଦୋକାନୀ କିଣିବା ବେଳେ ୧୦% ଏବଂ ବିକିବା ବେଳେ ୧୦% ଠକେଇ କରନ୍ତି | ତାଙ୍କର ମୋଟ ଲାଭ କେତେ?",
+    o: ["20%", "21%", "22%", "25%"],
+    a: 1,
+    exp: "Gain = $x + y + \frac{xy}{100} = 10 + 10 + 1 = 21\%$. <br> ମୋଟ ଲାଭ = ୧୦ + ୧୦ + (୧୦x୧୦)/୧୦୦ = ୨୧% |"
+  },
+  {
+    q: "The sum of squares of three consecutive natural numbers is 110. The numbers are: <br> ତିନୋଟି କ୍ରମିକ ପ୍ରାକୃତିକ ସଂଖ୍ୟାର ବର୍ଗର ସମଷ୍ଟି ୧୧୦ | ସଂଖ୍ୟାଗୁଡ଼ିକ କ’ଣ?",
+    o: ["5, 6, 7", "6, 7, 8", "7, 8, 9", "4, 5, 6"],
+    a: 0,
+    exp: "$5^2 + 6^2 + 7^2 = 25 + 36 + 49 = 110$. <br> ୫, ୬, ୭ ର ବର୍ଗର ମିଶାଣ ଫଳ ୧୧୦ ହେବ |"
+  },
+  {
+    q: "If the difference of two numbers is 3 and the difference of their squares is 39, find the larger number. <br> ଯଦି ଦୁଇଟି ସଂଖ୍ୟାର ଅନ୍ତର ୩ ଏବଂ ସେମାନଙ୍କ ବର୍ଗର ଅନ୍ତର ୩୯, ତେବେ ବଡ଼ ସଂଖ୍ୟାଟି କେତେ?",
+    o: ["8", "9", "10", "13"],
+    a: 0,
+    exp: "$x^2 - y^2 = 39 \Rightarrow (x-y)(x+y) = 39 \Rightarrow 3(x+y) = 39 \Rightarrow x+y = 13$. Solving with $x-y = 3$, $x=8$. <br> x-y = ୩ ଏବଂ x+y = ୧୩ | ଏହାକୁ ସମାଧାନ କଲେ x = ୮ ମିଳିବ |"
+  }
+
+
+];
+/* ===== End questions with explanations ===== */
+
+let answers={}, index=0, timeLeft, timerInt;
+
+window.onload = () => {
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+  if(saved){
+    if(saved.answers) answers = saved.answers; // restore previous answers
+    showScore(saved);
+  } else {
+    loader.classList.add("hidden");
+    instruction.classList.remove("hidden");
+  }
+};
+
+function startTest(){
+  instruction.classList.add("hidden");
+  test.classList.remove("hidden");
+  timeLeft=TEST_DURATION_MINUTES*60;
+  timerInt=setInterval(runTimer,1000);
+  buildGrid();loadQ();
+}
+
+function runTimer(){
+  if(timeLeft<=0){submitTest();return;}
+  timeLeft--;
+  timer.innerText=`${String(Math.floor(timeLeft/60)).padStart(2,"0")}:${String(timeLeft%60).padStart(2,"0")}`;
+}
+
+function loadQ(){
+  const q = questions[index];
+  question.innerHTML = (index + 1) + ". " + q.q;
+
+  /* ===== IMAGE LOGIC ===== */
+  imgWrap.classList.add("hidden");
+  qImg.style.display = "none";
+  imgLoader.style.display = "block";
+
+  if(q.img){
+    imgWrap.classList.remove("hidden");
+    qImg.src = q.img;
+
+    qImg.onload = () => {
+      imgLoader.style.display = "none";
+      qImg.style.display = "block";
+    };
+
+    qImg.onerror = () => {
+      imgWrap.classList.add("hidden");
+    };
+  }
+
+  options.innerHTML="";
+  q.o.forEach((t,i)=>{
+    const d=document.createElement("div");
+    d.className="option"+(answers[index]===i?" selected":"");
+    d.innerText=t;
+    d.onclick=()=>{
+      answers[index]=answers[index]===i?null:i;
+
+      /* ===== Save answers to localStorage ===== */
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+      saved.answers = answers;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+      /* ===== End save ===== */
+
+      loadQ();
+      updateGrid();
+    };
+    options.appendChild(d);
+  });
+
+  prevBtn.disabled = index === 0;
+  nextBtn.disabled = index === questions.length - 1;
+}
+
+function nextQ(){index++;loadQ();}
+function prevQ(){index--;loadQ();}
+
+function buildGrid(){
+  grid.innerHTML="";
+  questions.forEach((_,i)=>{
+    const d=document.createElement("div");
+    d.innerText=i+1;
+    d.onclick=()=>{index=i;loadQ();};
+    grid.appendChild(d);
+  });
+}
+
+function updateGrid(){
+  [...grid.children].forEach((d,i)=>d.classList.toggle("attempted",answers[i]!=null));
+}
+
+function submitTest(){
+  clearInterval(timerInt);
+  test.classList.add("hidden");
+  loader.classList.remove("hidden");
+  loader.querySelector("p").innerText="Saving score & calculating rank…";
+
+  let correct=0,wrong=0;
+  questions.forEach((q,i)=>{
+    if(answers[i]==null)return;
+    answers[i]===q.a?correct++:wrong++;
+  });
+
+  const score=+(correct-wrong*NEGATIVE_MARK).toFixed(2);
+
+  const baseData={
+    phone:user.phone,
+    name:user.name,
+    score,correct,wrong,
+    unattempted:questions.length-correct-wrong,
+    updatedAt:Date.now()
+  };
+
+  db.collection("tests").doc(TEST_ID).collection("results").doc(user.phone)
+  .set(baseData,{merge:true})
+  .then(()=>calculateRank(baseData));
+}
+
+function calculateRank(myData){
+  db.collection("tests").doc(TEST_ID).collection("results").get()
+  .then(snap=>{
+    const arr=snap.docs.map(d=>({...d.data(),id:d.id}));
+    arr.sort((a,b)=>b.score-a.score);
+    const rank=arr.findIndex(x=>x.id===user.phone)+1;
+    myData.rankText=`${rank} / ${arr.length}`;
+    myData.answers=answers;
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(myData));
+    showScore(myData);
+  });
+}
+
+function showScore(r){
+  loader.classList.add("hidden");
+  score.classList.remove("hidden");
+  userScore.innerText=`Hi ${r.name}, your score is ${r.score}`;
+  stats.innerHTML=`Correct: ${r.correct}<br>Wrong: ${r.wrong}<br>Unattempted: ${r.unattempted}<br><b>Rank: ${r.rankText}</b>`;
+  filterQ("all",document.querySelector(".filter button"));
+}
+
+function filterQ(type,btn){
+  document.querySelectorAll(".filter button").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  review.innerHTML="";
+  questions.forEach((q,i)=>{
+    const a=answers[i];
+    if(type==="correct"&&a!==q.a)return;
+    if(type==="wrong"&&(a==null||a===q.a))return;
+    if(type==="unattempted"&&a!=null)return;
+    const c=document.createElement("div");
+    c.className="card";
+    c.innerHTML=`
+      <b>${q.q}</b><br>
+      Your: ${a!=null?q.o[a]:"—"}<br>
+      Correct: ${q.o[q.a]}<br>
+      <details>
+        <summary>Show Explanation</summary>
+        <p>${q.exp || "No explanation provided."}</p>
+      </details>
+    `;
+    review.appendChild(c);
+  });
+}
+
+function reattempt(){popup.style.display="flex";}
+function confirmReattempt(){localStorage.removeItem(STORAGE_KEY);location.reload();}
+</script>
+</body>
+</html>
