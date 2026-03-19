@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EduMocker Test</title>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<style>
+  .q-image-wrap{margin:12px 0;display:flex;justify-content:center;align-items:center}
+  .img-loader{width:50px;height:50px;border:5px solid #ddd;border-top:5px solid #2c5364;border-radius:50%;animation:spin 1s linear infinite}
+  .q-image{max-width:100%;border-radius:12px;display:none}
+  *{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}
+  body{margin:0;background:#f4f6f8;padding:0}
+  .loader{height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center}
+  .circle{width:70px;height:70px;border:7px solid #ddd;border-top:7px solid #2c5364;border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .hidden{display:none}
+  .header{background:#fff;padding:12px;display:flex;justify-content:space-between;border-bottom:1px solid #ddd}
+  .container{padding:14px}
+  button{padding:12px;border:none;border-radius:10px;background:#2c5364;color:#fff;font-size:15px;cursor:pointer}
+  button:disabled{opacity:.4}
+  .q-inst{font-size:14px}
+  .question{font-weight:bold;margin:8px 0}
+  .option{background:#fff;border:1px solid #ccc;padding:12px;border-radius:10px;margin-bottom:10px;cursor:pointer}
+  .option.selected{background:#e8f1f5;border-color:#2c5364}
+  .nav{display:flex;justify-content:space-between;margin:10px 0}
+  .grid{display:flex;flex-wrap:wrap;gap:6px}
+  .grid div{width:32px;height:32px;border:1px solid #2c5364;display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .grid .attempted{background:#2c5364;color:#fff;border-radius:50%}
+  .score{padding:16px}
+  .card{background:#fff;padding:12px;border-radius:12px;margin-bottom:10px}
+  .filter{display:flex;gap:6px;margin-top:10px}
+  .filter button{flex:1;background:#ccc;color:#000}
+  .filter .active{background:#2c5364;color:#fff}
+  .popup{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;justify-content:center;align-items:center}
+  .popup-box{background:#fff;padding:18px;border-radius:14px;width:85%;text-align:center}
+</style>
+</head>
+<body>
+
+<div id="loader" class="loader">
+  <div class="circle"></div>
+  <p>Checking user…</p>
+</div>
+
+<div id="instruction" class="hidden container">
+  <h3>DI Sectional Mocktests Set - 2</h3>
+  <ul>
+    <li>Time: 25 Minutes</li>
+    <li>Negative Marking: 0.25 per wrong answer</li>
+    <li>Submit anytime</li>
+  </ul>
+  <button onclick="startTest()">Start Test</button>
+</div>
+
+<div id="test" class="hidden">
+  <div class="header">
+    <b></b>
+      <div class="q-inst">DI Sectional Mocktests Set - 2</div>
+    <span id="timer">25:00</span>
+  </div>
+  <div class="container">
+    
+    
+
+    <div id="imgWrap" class="q-image-wrap hidden">
+      <div id="imgLoader" class="img-loader"></div>
+      <img id="qImg" class="q-image">
+    </div>
+<div class="question" id="question"></div>
+    <div id="options"></div>
+
+    <div class="nav">
+      <button id="prevBtn" onclick="prevQ()">Previous</button>
+      <button id="nextBtn" onclick="nextQ()">Next</button>
+    </div>
+
+    <div class="grid" id="grid"></div>
+    <br>
+    <button onclick="submitTest()">Submit Test</button>
+  </div>
+</div>
+
+<div id="score" class="hidden score">
+  <h3>DI Sectional SET 2</h3>
+  <p id="userScore"></p>
+  <div class="card" id="stats"></div>
+
+  <div class="filter">
+    <button class="active" onclick="filterQ('all',this)">All</button>
+    <button onclick="filterQ('correct',this)">Correct</button>
+    <button onclick="filterQ('wrong',this)">Wrong</button>
+    <button onclick="filterQ('unattempted',this)">Unattempted</button>
+  </div>
+
+  <div id="review"></div>
+  <br>
+  <button onclick="reattempt()">Reattempt</button>
+</div>
+
+<div class="popup" id="popup">
+  <div class="popup-box">
+    <p>Your previous score & rank will be replaced.</p>
+    <button onclick="confirmReattempt()">OK</button>
+  </div>
+</div>
+
+<script>
+firebase.initializeApp({
+  apiKey: "AIzaSyBskR7Iuvep9d2W4NoPMilS6jST7pCWFs8",
+  authDomain: "edumocker-pyq.firebaseapp.com",
+  projectId: "edumocker-pyq"
+});
+const db = firebase.firestore();
+
+const TEST_ID = "Di-set--2";
+const STORAGE_KEY = "RESULT_" + TEST_ID;
+const TEST_DURATION_MINUTES = 25;
+const NEGATIVE_MARK = 0.25;
+
+const user = {
+  phone: localStorage.getItem("user_phone"),
+  name: localStorage.getItem("user_name")
+};
+if(!user.phone){ alert("Login required"); throw ""; }
+
+/* ===== Added explanations to questions ===== */
+const questions = [
+
+
+  {
+    q: "What is the ratio of the total valid votes cast for Candidate A in constituencies P and Q together to the total valid votes cast for Candidate B in constituencies S and T together?<br>ନିର୍ବାଚନ ମଣ୍ଡଳୀ P ଏବଂ Q ରେ ପ୍ରାର୍ଥୀ A ଙ୍କ ମୋଟ ବୈଧ ଭୋଟ୍ ଏବଂ ନିର୍ବାଚନ ମଣ୍ଡଳୀ S ଏବଂ T ରେ ପ୍ରାର୍ଥୀ B ଙ୍କ ମୋଟ ବୈଧ ଭୋଟ୍ ମଧ୍ୟରେ ଅନୁପାତ କେତେ?",
+    o: ["11 : 15", "5 : 7", "11 : 16", "9 : 14"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhan8C3Jagd7QV-sAJqNT3YZKf2CipowQ4iOYDNLLeAFqn2Cqg5ZkxOTs4Zb526ghrD4adbhNih9NrSOZ4_p5kVqgu1p17_fCR0GOsTTMZ4tNS6Kju_OnMKZuSuyG3s1Z4vH_1n5MUlVVkL8jz8BDdCFmmw_BAWudCcmGwDGxwBGxgnzoXJh-jOyYyjNYZx/s320/Screenshot%202026-03-20%2012.52.50%20AM.png",
+    exp: "English:<br>1. Candidate A (P + Q) = 35 + 20 = 55 thousand.<br>2. Candidate B (S + T) = 55 + 20 = 75 thousand.<br>3. Ratio = 55 : 75 = 11 : 15.<br><br>Odia:<br>୧. ପ୍ରାର୍ଥୀ A (P + Q) = ୩୫ + ୨୦ = ୫୫ ହଜାର |<br>୨. ପ୍ରାର୍ଥୀ B (S + T) = ୫୫ + ୨୦ = ୭୫ ହଜାର |<br>୩. ଅନୁପାତ = ୫୫ : ୭୫ = ୧୧ : ୧୫ |"
+  },
+  {
+    q: "The number of valid votes cast for Candidate B in constituency R is what percent less than the number of valid votes cast for Candidate A in constituency S?<br>ନିର୍ବାଚନ ମଣ୍ଡଳୀ R ରେ ପ୍ରାର୍ଥୀ B ଙ୍କ ବୈଧ ଭୋଟ୍ ସଂଖ୍ୟା, ନିର୍ବାଚନ ମଣ୍ଡଳୀ S ରେ ପ୍ରାର୍ଥୀ A ଙ୍କ ବୈଧ ଭୋଟ୍ ସଂଖ୍ୟା ଠାରୁ କେତେ ପ୍ରତିଶତ କମ୍?",
+    o: ["20% / ୨୦%", "25% / ୨୫%", "30% / ୩୦%", "33.33% / ୩୩.୩୩%"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhan8C3Jagd7QV-sAJqNT3YZKf2CipowQ4iOYDNLLeAFqn2Cqg5ZkxOTs4Zb526ghrD4adbhNih9NrSOZ4_p5kVqgu1p17_fCR0GOsTTMZ4tNS6Kju_OnMKZuSuyG3s1Z4vH_1n5MUlVVkL8jz8BDdCFmmw_BAWudCcmGwDGxwBGxgnzoXJh-jOyYyjNYZx/s320/Screenshot%202026-03-20%2012.52.50%20AM.png",
+    exp: "English:<br>1. Candidate B in R = 30 thousand.<br>2. Candidate A in S = 40 thousand.<br>3. Difference = 40 - 30 = 10.<br>4. Percentage less = (10 / 40) × 100 = 25%.<br><br>Odia:<br>୧. R ରେ ପ୍ରାର୍ଥୀ B = ୩୦ ହଜାର |<br>୨. S ରେ ପ୍ରାର୍ଥୀ A = ୪୦ ହଜାର |<br>୩. ପାର୍ଥକ୍ୟ = ୪୦ - ୩୦ = ୧୦ |<br>୪. ପ୍ରତିଶତ କମ୍ = (୧୦ / ୪୦) × ୧୦୦ = ୨୫% |"
+  },
+  {
+    q: "If the total number of votes cast in constituency Q (including invalid votes) was 80,000, then what is the percentage of invalid votes in constituency Q?<br>ଯଦି ନିର୍ବାଚନ ମଣ୍ଡଳୀ Q ରେ ମୋଟ ଭୋଟ୍ ସଂଖ୍ୟା (ଅବୈଧ ଭୋଟ୍ ସହିତ) ୮୦,୦୦୦ ଥିଲା, ତେବେ ନିର୍ବାଚନ ମଣ୍ଡଳୀ Q ରେ ଅବୈଧ ଭୋଟ୍‌ର ପ୍ରତିଶତ କେତେ?",
+    o: ["12.5% / ୧୨.୫%", "15.25% / ୧୫.୨୫%", "18.75% / ୧୮.୭୫%", "20% / ୨୦%"],
+    a: 2,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhan8C3Jagd7QV-sAJqNT3YZKf2CipowQ4iOYDNLLeAFqn2Cqg5ZkxOTs4Zb526ghrD4adbhNih9NrSOZ4_p5kVqgu1p17_fCR0GOsTTMZ4tNS6Kju_OnMKZuSuyG3s1Z4vH_1n5MUlVVkL8jz8BDdCFmmw_BAWudCcmGwDGxwBGxgnzoXJh-jOyYyjNYZx/s320/Screenshot%202026-03-20%2012.52.50%20AM.png",
+    exp: "English:<br>1. Valid votes in Q = 20 (A) + 45 (B) = 65,000.<br>2. Total votes = 80,000.<br>3. Invalid votes = 80,000 - 65,000 = 15,000.<br>4. Percentage = (15,000 / 80,000) × 100 = 18.75%.<br><br>Odia:<br>୧. Q ରେ ବୈଧ ଭୋଟ୍ = ୨୦ (A) + ୪୫ (B) = ୬୫,୦୦୦ |<br>୨. ମୋଟ ଭୋଟ୍ = ୮୦,୦୦୦ |<br>୩. ଅବୈଧ ଭୋଟ୍ = ୮୦,୦୦୦ - ୬୫,୦୦୦ = ୧୫,୦୦୦ |<br>୪. ପ୍ରତିଶତ = (୧୫,୦୦୦ / ୮୦,୦୦୦) × ୧୦୦ = ୧୮.୭୫% |"
+  },
+  {
+    q: "Find the difference between the average number of valid votes cast for Candidate A across all five constituencies and the average number of valid votes cast for Candidate B across all five constituencies.<br>ସମସ୍ତ ପାଞ୍ଚଟି ନିର୍ବାଚନ ମଣ୍ଡଳୀରେ ପ୍ରାର୍ଥୀ A ଙ୍କ ହାରାହାରି ବୈଧ ଭୋଟ୍ ଏବଂ ପ୍ରାର୍ଥୀ B ଙ୍କ ହାରାହାରି ବୈଧ ଭୋଟ୍ ମଧ୍ୟରେ ପାର୍ଥକ୍ୟ ନିର୍ଣ୍ଣୟ କରନ୍ତୁ |",
+    o: ["2,000 / ୨,୦୦୦", "3,000 / ୩,୦୦୦", "4,000 / ୪,୦୦୦", "0"],
+    a: 3,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhan8C3Jagd7QV-sAJqNT3YZKf2CipowQ4iOYDNLLeAFqn2Cqg5ZkxOTs4Zb526ghrD4adbhNih9NrSOZ4_p5kVqgu1p17_fCR0GOsTTMZ4tNS6Kju_OnMKZuSuyG3s1Z4vH_1n5MUlVVkL8jz8BDdCFmmw_BAWudCcmGwDGxwBGxgnzoXJh-jOyYyjNYZx/s320/Screenshot%202026-03-20%2012.52.50%20AM.png",
+    exp: "English:<br>1. Total A = 35+20+50+40+30 = 175,000. Average A = 175/5 = 35,000.<br>2. Total B = 25+45+30+55+20 = 175,000. Average B = 165/5 = 33,000.<br>3. Difference = 35,000 - 33,000 = 2,000.<br><br>Odia:<br>୧. ମୋଟ A = ୩୫+୨୦+୫୦+୪୦+୩୦ = ୧୭୫,୦୦୦ | ହାରାହାରି A = ୩୫,୦୦୦ |<br>୨. ମୋଟ B = ୨୫+୪୫+୩୦+୫୫+୨୦ = ୧୬୫,୦୦୦ | ହାରାହାରି B = ୩୩,୦୦୦ |<br>୩. ପାର୍ଥକ୍ୟ = ୩୫,୦୦୦ - ୩୩,୦୦୦ = ୨,୦୦୦ |"
+  },
+  {
+    q: "In a new constituency ‘U’, the votes for Candidate A are 20% more than his votes in constituency R, and votes for Candidate B are 10% less than his votes in constituency S. What is the total number of valid votes in constituency U?<br>ଏକ ନୂତନ ନିର୍ବାଚନ ମଣ୍ଡଳୀ 'U' ରେ, ପ୍ରାର୍ଥୀ A ଙ୍କ ଭୋଟ୍ ନିର୍ବାଚନ ମଣ୍ଡଳୀ R ରେ ଥିବା ତାଙ୍କ ଭୋଟ୍ ଠାରୁ ୨୦% ଅଧିକ ଏବଂ ପ୍ରାର୍ଥୀ B ଙ୍କ ଭୋଟ୍ ନିର୍ବାଚନ ମଣ୍ଡଳୀ S ରେ ଥିବା ତାଙ୍କ ଭୋଟ୍ ଠାରୁ ୧୦% କମ୍ | ନିର୍ବାଚନ ମଣ୍ଡଳୀ U ରେ ମୋଟ ବୈଧ ଭୋଟ୍ ସଂଖ୍ୟା କେତେ?",
+    o: ["105,500", "109,500", "112,000", "115,500"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhan8C3Jagd7QV-sAJqNT3YZKf2CipowQ4iOYDNLLeAFqn2Cqg5ZkxOTs4Zb526ghrD4adbhNih9NrSOZ4_p5kVqgu1p17_fCR0GOsTTMZ4tNS6Kju_OnMKZuSuyG3s1Z4vH_1n5MUlVVkL8jz8BDdCFmmw_BAWudCcmGwDGxwBGxgnzoXJh-jOyYyjNYZx/s320/Screenshot%202026-03-20%2012.52.50%20AM.png",
+    exp: "English:<br>1. A in U = 120% of R = 1.2 × 50 = 60,000.<br>2. B in U = 90% of S = 0.9 × 55 = 49,500.<br>3. Total in U = 60,000 + 49,500 = 109,500.<br><br>Odia:<br>୧. U ରେ A = R ର ୧୨୦% = ୧.୨ × ୫୦ = ୬୦,୦୦୦ |<br>୨. U ରେ B = S ର ୯୦% = ୦.୯ × ୫୫ = ୪୯,୫୦୦ |<br>୩. U ରେ ମୋଟ ଭୋଟ୍ = ୬୦,୦୦୦ + ୪୯,୫୦୦ = ୧୦୯,୫୦୦ |"
+  },
+  {
+    q: "What is the total number of Academic books published by Company C?<br>କମ୍ପାନୀ C ଦ୍ୱାରା ପ୍ରକାଶିତ ମୋଟ ଏକାଡେମିକ୍ (Academic) ବହି ସଂଖ୍ୟା କେତେ?",
+    o: ["280", "320", "420", "350"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEguyQp3dEidTlTbwniVNZmtM7lsQGWDgBE4TUIRMNvA2_vk3-OrD1wnrYcXjOzjKjovvET35ULEid8rVLOvQLhS3LleOWf7OROqwfPtXIzEbTheQLw8EfL0SfK0YFMqjhQz4AmFCADo96Gw9w_i6_ppp-x1RjnbKN41xPiAZgh53l388KQ1YlBWh_74wQPn/s320/Screenshot%202026-03-20%201.03.47%20AM.png",
+    exp: "Total books = 1500. <br> Company A = 20% of 1500 = 300. <br> Remaining (B+C) = 1200. <br> C = B + 200. So, B + (B + 200) = 1200 => 2B = 1000 => B = 500, C = 700. <br> Non-Academic in C = 60% of 700 = 420. <br> Academic in C = 700 - 420 = 280. <br><br> ମୋଟ ବହି = ୧୫୦୦ | <br> କମ୍ପାନୀ A = ୧୫୦୦ ର ୨୦% = ୩୦୦ | <br> ବାକି (B+C) = ୧୨୦୦ | <br> C = B + ୨୦୦ | ତେଣୁ, B + (B + ୨୦୦) = ୧୨୦୦ => ୨B = ୧୦୦୦ => B = ୫୦୦, C = ୭୦୦ | <br> କମ୍ପାନୀ C ରେ Non-Academic = ୭୦୦ ର ୬୦% = ୪୨୦ | <br> କମ୍ପାନୀ C ରେ Academic = ୭୦୦ - ୪୨୦ = ୨୮୦ |"
+  },
+  {
+    q: "What is the ratio of the total books published by Company B to the total books published by Company A?<br>କମ୍ପାନୀ B ଦ୍ୱାରା ପ୍ରକାଶିତ ମୋଟ ବହି ଏବଂ କମ୍ପାନୀ A ଦ୍ୱାରା ପ୍ରକାଶିତ ମୋଟ ବହିର ଅନୁପାତ କେତେ?",
+    o: ["5:3 / ୫:୩", "2:3 / ୨:୩", "1:1 / ୧:୧", "3:4 / ୩:୪"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEguyQp3dEidTlTbwniVNZmtM7lsQGWDgBE4TUIRMNvA2_vk3-OrD1wnrYcXjOzjKjovvET35ULEid8rVLOvQLhS3LleOWf7OROqwfPtXIzEbTheQLw8EfL0SfK0YFMqjhQz4AmFCADo96Gw9w_i6_ppp-x1RjnbKN41xPiAZgh53l388KQ1YlBWh_74wQPn/s320/Screenshot%202026-03-20%201.03.47%20AM.png",
+    exp: "Total books by Company B = 500. <br> Total books by Company A = 300. <br> Ratio = 500 : 300 = 5 : 3. <br><br> କମ୍ପାନୀ B ର ମୋଟ ବହି = ୫୦୦ | <br> କମ୍ପାନୀ A ର ମୋଟ ବହି = ୩୦୦ | <br> ଅନୁପାତ = ୫୦୦ : ୩୦୦ = ୫ : ୩ |"
+  },
+  {
+    q: "The number of Non-Academic books published by Company B is what percent of the total books published by Company B?<br>କମ୍ପାନୀ B ଦ୍ୱାରା ପ୍ରକାଶିତ Non-Academic ବହି ସଂଖ୍ୟା, କମ୍ପାନୀ B ର ମୋଟ ବହିର କେତେ ପ୍ରତିଶତ?",
+    o: ["75%", "80%", "60%", "70%"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEguyQp3dEidTlTbwniVNZmtM7lsQGWDgBE4TUIRMNvA2_vk3-OrD1wnrYcXjOzjKjovvET35ULEid8rVLOvQLhS3LleOWf7OROqwfPtXIzEbTheQLw8EfL0SfK0YFMqjhQz4AmFCADo96Gw9w_i6_ppp-x1RjnbKN41xPiAZgh53l388KQ1YlBWh_74wQPn/s320/Screenshot%202026-03-20%201.03.47%20AM.png",
+    exp: "Company A Academic:Non-Acad = 2:1 of 300. Acad=200, Non-Acad=100. <br> Company B Academic = Non-Acad of A = 100. <br> Company B Non-Academic = Total B - Academic B = 500 - 100 = 400. <br> Percentage = (400 / 500) * 100 = 80%. <br><br> କମ୍ପାନୀ A ର Academic:Non-Acad = ୨:୧ (୩୦୦ ର) | Acad=୨୦୦, Non-Acad=୧୦୦ | <br> କମ୍ପାନୀ B ର Academic = A ର Non-Acad = ୧୦୦ | <br> କମ୍ପାନୀ B ର Non-Academic = ମୋଟ B - Academic B = ୫୦୦ - ୧୦୦ = ୪୦୦ | <br> ପ୍ରତିଶତ = (୪୦୦ / ୫୦୦) * ୧୦୦ = ୮୦% |"
+  },
+  {
+    q: "What is the difference between the total Academic books and total Non-Academic books published by all three companies together?<br>ତିନୋଟିଯାକ କମ୍ପାନୀ ଦ୍ୱାରା ପ୍ରକାଶିତ ମୋଟ Academic ବହି ଏବଂ ମୋଟ Non-Academic ବହି ମଧ୍ୟରେ ପାର୍ଥକ୍ୟ କେତେ?",
+    o: ["180", "240", "260", "340"],
+    a: 3,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEguyQp3dEidTlTbwniVNZmtM7lsQGWDgBE4TUIRMNvA2_vk3-OrD1wnrYcXjOzjKjovvET35ULEid8rVLOvQLhS3LleOWf7OROqwfPtXIzEbTheQLw8EfL0SfK0YFMqjhQz4AmFCADo96Gw9w_i6_ppp-x1RjnbKN41xPiAZgh53l388KQ1YlBWh_74wQPn/s320/Screenshot%202026-03-20%201.03.47%20AM.png",
+    exp: "Total Academic = 200 (A) + 100 (B) + 280 (C) = 580. <br> Total Non-Academic = 100 (A) + 400 (B) + 420 (C) = 920. <br> Difference = 920 - 580 = 340. <br><br> ମୋଟ Academic = ୨୦୦ (A) + ୧୦୦ (B) + ୨୮୦ (C) = ୫୮୦ | <br> ମୋଟ Non-Academic = ୧୦୦ (A) + ୪୦୦ (B) + ୪୨୦ (C) = ୯୨୦ | <br> ପାର୍ଥକ୍ୟ = ୯୨୦ - ୫୮୦ = ୩୪୦ |"
+  },
+  {
+    q: "If the cost of publishing one Academic book for Company A is ₹200, what is the total cost incurred by Company A for all its Academic books?<br>ଯଦି କମ୍ପାନୀ A ପାଇଁ ଗୋଟିଏ Academic ବହିର ପ୍ରକାଶନ ମୂଲ୍ୟ ₹୨୦୦ ହୁଏ, ତେବେ କମ୍ପାନୀ A ର ସମସ୍ତ Academic ବହି ପାଇଁ ମୋଟ କେତେ ଖର୍ଚ୍ଚ ହୋଇଛି?",
+    o: ["₹30,000", "₹40,000", "₹50,000", "₹60,000"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEguyQp3dEidTlTbwniVNZmtM7lsQGWDgBE4TUIRMNvA2_vk3-OrD1wnrYcXjOzjKjovvET35ULEid8rVLOvQLhS3LleOWf7OROqwfPtXIzEbTheQLw8EfL0SfK0YFMqjhQz4AmFCADo96Gw9w_i6_ppp-x1RjnbKN41xPiAZgh53l388KQ1YlBWh_74wQPn/s320/Screenshot%202026-03-20%201.03.47%20AM.png",
+    exp: "Academic books by Company A = 200. <br> Cost per book = ₹200. <br> Total cost = 200 * 200 = ₹40,000. <br><br> କମ୍ପାନୀ A ର Academic ବହି ସଂଖ୍ୟା = ୨୦୦ | <br> ବହି ପିଛା ଖର୍ଚ୍ଚ = ₹୨୦୦ | <br> ମୋଟ ଖର୍ଚ୍ଚ = ୨୦୦ * ୨୦୦ = ₹୪୦,୦୦୦ |"
+  },
+
+    
+  {
+    q: "If Maharashtra has 1200 branches and the average asset per branch is Rs. 1 crore, what is the value of 'B' in Gujarat, given that Gujarat's asset is 1.5 times Maharashtra's?<br>ଯଦି ମହାରାଷ୍ଟ୍ରର ୧୨୦୦ ଶାଖା ଅଛି ଏବଂ ଶାଖା ପିଛା ହାରାହାରି ସମ୍ପତ୍ତି ୧ କୋଟି ଟଙ୍କା, ତେବେ ଗୁଜରାଟରେ 'B' ର ମୂଲ୍ୟ କେତେ, ଯଦି ଗୁଜରାଟର ସମ୍ପତ୍ତି ମହାରାଷ୍ଟ୍ରର ୧.୫ ଗୁଣ?",
+    o: ["1500 / ୧୫୦୦", "1800 / ୧୮୦୦", "2000 / ୨୦୦୦", "2400 / ୨୪୦୦"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgYVieQCZanrDVdfyHBVtq1V3RYIy-ZKjoQc1lAFg_HUWcoB1rR7ROkR1B05Mel1f4ymuVefOa4AUfHTTgccBf7a1YG4i0m5lglhN-Jx89WM4kmtMMotfuaUL3wO_vb_4VshC9e7xEoEZeCTQ8Ad7U3zh1IKaAha8G8kZC4eQVs1XwCC-KAR59mJxDSE1jo/s320/Screenshot%202026-03-20%201.32.38%20AM.png",
+    exp: "Total Assets of Maharashtra = 1200 branches × 1 Cr = 1200 Cr.<br>Asset of Gujarat (B) = 1.5 × Maharashtra's Asset = 1.5 × 1200 = 1800 Cr.<br><br>ମହାରାଷ୍ଟ୍ରର ମୋଟ ସମ୍ପତ୍ତି = ୧୨୦୦ ଶାଖା × ୧ କୋଟି = ୧୨୦୦ କୋଟି |<br>ଗୁଜରାଟର ସମ୍ପତ୍ତି (B) = ୧.୫ × ମହାରାଷ୍ଟ୍ରର ସମ୍ପତ୍ତି = ୧.୫ × ୧୨୦୦ = ୧୮୦୦ କୋଟି |"
+  },
+  {
+    q: "The ratio of the number of staff in Maharashtra to Gujarat is 5:6. What is the value of 'C'?<br>ମହାରାଷ୍ଟ୍ର ଏବଂ ଗୁଜରାଟର କର୍ମଚାରୀ ସଂଖ୍ୟାର ଅନୁପାତ ୫:୬ | 'C' ର ମୂଲ୍ୟ କେତେ?",
+    o: ["5500 / ୫୫୦୦", "6000 / ୬୦୦୦", "6500 / ୬୫୦୦", "7000 / ୭୦୦୦"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgYVieQCZanrDVdfyHBVtq1V3RYIy-ZKjoQc1lAFg_HUWcoB1rR7ROkR1B05Mel1f4ymuVefOa4AUfHTTgccBf7a1YG4i0m5lglhN-Jx89WM4kmtMMotfuaUL3wO_vb_4VshC9e7xEoEZeCTQ8Ad7U3zh1IKaAha8G8kZC4eQVs1XwCC-KAR59mJxDSE1jo/s320/Screenshot%202026-03-20%201.32.38%20AM.png",
+    exp: "Staff in Maharashtra = 5000.<br>Ratio is 5:6. So, 5 parts = 5000.<br>1 part = 1000.<br>Staff in Gujarat (C) = 6 parts = 6 × 1000 = 6000.<br><br>ମହାରାଷ୍ଟ୍ରର କର୍ମଚାରୀ = ୫୦୦୦ |<br>ଅନୁପାତ ୫:୬, ତେଣୁ ୫ ଭାଗ = ୫୦୦୦ |<br>୧ ଭାଗ = ୧୦୦୦ |<br>ଗୁଜରାଟର କର୍ମଚାରୀ (C) = ୬ ଭାଗ = ୬ × ୧୦୦୦ = ୬୦୦୦ |"
+  },
+  {
+    q: "Karnataka has 10% fewer branches than West Bengal. What is the value of 'D'?<br>କର୍ଣ୍ଣାଟକରେ ପଶ୍ଚିମବଙ୍ଗ ତୁଳନାରେ ୧୦% କମ୍ ଶାଖା ଅଛି | 'D' ର ମୂଲ୍ୟ କେତେ?",
+    o: ["800 / ୮୦୦", "810 / ୮୧୦", "820 / ୮୨୦", "830 / ୮୩୦"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgYVieQCZanrDVdfyHBVtq1V3RYIy-ZKjoQc1lAFg_HUWcoB1rR7ROkR1B05Mel1f4ymuVefOa4AUfHTTgccBf7a1YG4i0m5lglhN-Jx89WM4kmtMMotfuaUL3wO_vb_4VshC9e7xEoEZeCTQ8Ad7U3zh1IKaAha8G8kZC4eQVs1XwCC-KAR59mJxDSE1jo/s320/Screenshot%202026-03-20%201.32.38%20AM.png",
+    exp: "Branches in West Bengal = 900.<br>Reduction = 10% of 900 = 90.<br>Branches in Karnataka (D) = 900 - 90 = 810.<br><br>ପଶ୍ଚିମବଙ୍ଗର ଶାଖା = ୯୦୦ |<br>ହ୍ରାସ = ୯୦୦ ର ୧୦% = ୯୦ |<br>କର୍ଣ୍ଣାଟକର ଶାଖା (D) = ୯୦୦ - ୯୦ = ୮୧୦ |"
+  },
+  {
+    q: "If the average asset per branch in Tamil Nadu is Rs. 1.25 crores, what is the value of 'F'?<br>ଯଦି ତାମିଲନାଡୁରେ ଶାଖା ପିଛା ହାରାହାରି ସମ୍ପତ୍ତି ୧.୨୫ କୋଟି ଟଙ୍କା, ତେବେ 'F' ର ମୂଲ୍ୟ କେତେ?",
+    o: ["1000 / ୧୦୦୦", "1100 / ୧୧୦୦", "1200 / ୧୨୦୦", "1300 / ୧୩୦୦"],
+    a: 2,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgYVieQCZanrDVdfyHBVtq1V3RYIy-ZKjoQc1lAFg_HUWcoB1rR7ROkR1B05Mel1f4ymuVefOa4AUfHTTgccBf7a1YG4i0m5lglhN-Jx89WM4kmtMMotfuaUL3wO_vb_4VshC9e7xEoEZeCTQ8Ad7U3zh1IKaAha8G8kZC4eQVs1XwCC-KAR59mJxDSE1jo/s320/Screenshot%202026-03-20%201.32.38%20AM.png",
+    exp: "Total Assets in Tamil Nadu = 1500 Cr.<br>Average Asset per Branch = 1.25 Cr.<br>Number of Branches (F) = Total Assets / Average Asset = 1500 / 1.25 = 1200.<br><br>ତାମିଲନାଡୁର ମୋଟ ସମ୍ପତ୍ତି = ୧୫୦୦ କୋଟି |<br>ଶାଖା ପିଛା ହାରାହାରି ସମ୍ପତ୍ତି = ୧.୨୫ କୋଟି |<br>ଶାଖା ସଂଖ୍ୟା (F) = ମୋଟ ସମ୍ପତ୍ତି / ହାରାହାରି ସମ୍ପତ୍ତି = ୧୫୦୦ / ୧.୨୫ = ୧୨୦୦ |"
+  },
+  {
+    q: "The total assets of all five states is Rs. 7500 crores. What is the value of 'E'?<br>ସମସ୍ତ ପାଞ୍ଚଟି ରାଜ୍ୟର ମୋଟ ସମ୍ପତ୍ତି ୭୫୦୦ କୋଟି ଟଙ୍କା | 'E' ର ମୂଲ୍ୟ କେତେ?",
+    o: ["1200 / ୧୨୦୦", "1500 / ୧୫୦୦", "1800 / ୧୮୦୦", "2000 / ୨୦୦୦"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgYVieQCZanrDVdfyHBVtq1V3RYIy-ZKjoQc1lAFg_HUWcoB1rR7ROkR1B05Mel1f4ymuVefOa4AUfHTTgccBf7a1YG4i0m5lglhN-Jx89WM4kmtMMotfuaUL3wO_vb_4VshC9e7xEoEZeCTQ8Ad7U3zh1IKaAha8G8kZC4eQVs1XwCC-KAR59mJxDSE1jo/s320/Screenshot%202026-03-20%201.32.38%20AM.png",
+    exp: "Total Assets = MH + GJ + KA + TN + WB.<br>7500 = 1200 + 1800 (from Q1) + E + 1500 + 1800.<br>7500 = 6300 + E.<br>E = 7500 - 6300 = 1200 Cr.<br><br>ମୋଟ ସମ୍ପତ୍ତି = ମହାରାଷ୍ଟ୍ର + ଗୁଜରାଟ + କର୍ଣ୍ଣାଟକ + ତାମିଲନାଡୁ + ପଶ୍ଚିମବଙ୍ଗ |<br>୭୫୦୦ = ୧୨୦୦ + ୧୮୦୦ (ପ୍ରଶ୍ନ ୧ ରୁ) + E + ୧୫୦୦ + ୧୮୦୦ |<br>୭୫୦୦ = ୬୩୦୦ + E |<br>E = ୭୫୦୦ - ୬୩୦୦ = ୧୨୦୦ କୋଟି |"
+  }
+
+
+
+
+
+
+
+    
+];
+/* ===== End questions with explanations ===== */
+
+let answers={}, index=0, timeLeft, timerInt;
+
+window.onload = () => {
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+  if(saved){
+    if(saved.answers) answers = saved.answers; // restore previous answers
+    showScore(saved);
+  } else {
+    loader.classList.add("hidden");
+    instruction.classList.remove("hidden");
+  }
+};
+
+function startTest(){
+  instruction.classList.add("hidden");
+  test.classList.remove("hidden");
+  timeLeft=TEST_DURATION_MINUTES*60;
+  timerInt=setInterval(runTimer,1000);
+  buildGrid();loadQ();
+}
+
+function runTimer(){
+  if(timeLeft<=0){submitTest();return;}
+  timeLeft--;
+  timer.innerText=`${String(Math.floor(timeLeft/60)).padStart(2,"0")}:${String(timeLeft%60).padStart(2,"0")}`;
+}
+
+function loadQ(){
+  const q = questions[index];
+  question.innerHTML = (index + 1) + ". " + q.q;
+
+  /* ===== IMAGE LOGIC ===== */
+  imgWrap.classList.add("hidden");
+  qImg.style.display = "none";
+  imgLoader.style.display = "block";
+
+  if(q.img){
+    imgWrap.classList.remove("hidden");
+    qImg.src = q.img;
+
+    qImg.onload = () => {
+      imgLoader.style.display = "none";
+      qImg.style.display = "block";
+    };
+
+    qImg.onerror = () => {
+      imgWrap.classList.add("hidden");
+    };
+  }
+
+  options.innerHTML="";
+  q.o.forEach((t,i)=>{
+    const d=document.createElement("div");
+    d.className="option"+(answers[index]===i?" selected":"");
+    d.innerText=t;
+    d.onclick=()=>{
+      answers[index]=answers[index]===i?null:i;
+
+      /* ===== Save answers to localStorage ===== */
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+      saved.answers = answers;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+      /* ===== End save ===== */
+
+      loadQ();
+      updateGrid();
+    };
+    options.appendChild(d);
+  });
+
+  prevBtn.disabled = index === 0;
+  nextBtn.disabled = index === questions.length - 1;
+}
+
+function nextQ(){index++;loadQ();}
+function prevQ(){index--;loadQ();}
+
+function buildGrid(){
+  grid.innerHTML="";
+  questions.forEach((_,i)=>{
+    const d=document.createElement("div");
+    d.innerText=i+1;
+    d.onclick=()=>{index=i;loadQ();};
+    grid.appendChild(d);
+  });
+}
+
+function updateGrid(){
+  [...grid.children].forEach((d,i)=>d.classList.toggle("attempted",answers[i]!=null));
+}
+
+function submitTest(){
+  clearInterval(timerInt);
+  test.classList.add("hidden");
+  loader.classList.remove("hidden");
+  loader.querySelector("p").innerText="Saving score & calculating rank…";
+
+  let correct=0,wrong=0;
+  questions.forEach((q,i)=>{
+    if(answers[i]==null)return;
+    answers[i]===q.a?correct++:wrong++;
+  });
+
+  const score=+(correct-wrong*NEGATIVE_MARK).toFixed(2);
+
+  const baseData={
+    phone:user.phone,
+    name:user.name,
+    score,correct,wrong,
+    unattempted:questions.length-correct-wrong,
+    updatedAt:Date.now()
+  };
+
+  db.collection("tests").doc(TEST_ID).collection("results").doc(user.phone)
+  .set(baseData,{merge:true})
+  .then(()=>calculateRank(baseData));
+}
+
+function calculateRank(myData){
+  db.collection("tests").doc(TEST_ID).collection("results").get()
+  .then(snap=>{
+    const arr=snap.docs.map(d=>({...d.data(),id:d.id}));
+    arr.sort((a,b)=>b.score-a.score);
+    const rank=arr.findIndex(x=>x.id===user.phone)+1;
+    myData.rankText=`${rank} / ${arr.length}`;
+    myData.answers=answers;
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(myData));
+    showScore(myData);
+  });
+}
+
+function showScore(r){
+  loader.classList.add("hidden");
+  score.classList.remove("hidden");
+  userScore.innerText=`Hi ${r.name}, your score is ${r.score}`;
+  stats.innerHTML=`Correct: ${r.correct}<br>Wrong: ${r.wrong}<br>Unattempted: ${r.unattempted}<br><b>Rank: ${r.rankText}</b>`;
+  filterQ("all",document.querySelector(".filter button"));
+}
+
+function filterQ(type,btn){
+  document.querySelectorAll(".filter button").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  review.innerHTML="";
+  questions.forEach((q,i)=>{
+    const a=answers[i];
+    if(type==="correct"&&a!==q.a)return;
+    if(type==="wrong"&&(a==null||a===q.a))return;
+    if(type==="unattempted"&&a!=null)return;
+    const c=document.createElement("div");
+    c.className="card";
+    c.innerHTML=`
+      <b>${q.q}</b><br>
+      Your: ${a!=null?q.o[a]:"—"}<br>
+      Correct: ${q.o[q.a]}<br>
+      <details>
+        <summary>Show Explanation</summary>
+        <p>${q.exp || "No explanation provided."}</p>
+      </details>
+    `;
+    review.appendChild(c);
+  });
+}
+
+function reattempt(){popup.style.display="flex";}
+function confirmReattempt(){localStorage.removeItem(STORAGE_KEY);location.reload();}
+</script>
+</body>
+</html>
