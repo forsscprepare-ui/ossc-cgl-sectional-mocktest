@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EduMocker Test</title>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<style>
+  .q-image-wrap{margin:12px 0;display:flex;justify-content:center;align-items:center}
+  .img-loader{width:50px;height:50px;border:5px solid #ddd;border-top:5px solid #2c5364;border-radius:50%;animation:spin 1s linear infinite}
+  .q-image{max-width:100%;border-radius:12px;display:none}
+  *{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}
+  body{margin:0;background:#f4f6f8;padding:0}
+  .loader{height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center}
+  .circle{width:70px;height:70px;border:7px solid #ddd;border-top:7px solid #2c5364;border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .hidden{display:none}
+  .header{background:#fff;padding:12px;display:flex;justify-content:space-between;border-bottom:1px solid #ddd}
+  .container{padding:14px}
+  button{padding:12px;border:none;border-radius:10px;background:#2c5364;color:#fff;font-size:15px;cursor:pointer}
+  button:disabled{opacity:.4}
+  .q-inst{font-size:14px}
+  .question{font-weight:bold;margin:8px 0}
+  .option{background:#fff;border:1px solid #ccc;padding:12px;border-radius:10px;margin-bottom:10px;cursor:pointer}
+  .option.selected{background:#e8f1f5;border-color:#2c5364}
+  .nav{display:flex;justify-content:space-between;margin:10px 0}
+  .grid{display:flex;flex-wrap:wrap;gap:6px}
+  .grid div{width:32px;height:32px;border:1px solid #2c5364;display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .grid .attempted{background:#2c5364;color:#fff;border-radius:50%}
+  .score{padding:16px}
+  .card{background:#fff;padding:12px;border-radius:12px;margin-bottom:10px}
+  .filter{display:flex;gap:6px;margin-top:10px}
+  .filter button{flex:1;background:#ccc;color:#000}
+  .filter .active{background:#2c5364;color:#fff}
+  .popup{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;justify-content:center;align-items:center}
+  .popup-box{background:#fff;padding:18px;border-radius:14px;width:85%;text-align:center}
+</style>
+</head>
+<body>
+
+<div id="loader" class="loader">
+  <div class="circle"></div>
+  <p>Checking user…</p>
+</div>
+
+<div id="instruction" class="hidden container">
+  <h3>DI Sectional Mocktests Set - 1</h3>
+  <ul>
+    <li>Time: 25 Minutes</li>
+    <li>Negative Marking: 0.25 per wrong answer</li>
+    <li>Submit anytime</li>
+  </ul>
+  <button onclick="startTest()">Start Test</button>
+</div>
+
+<div id="test" class="hidden">
+  <div class="header">
+    <b></b>
+      <div class="q-inst">DI Sectional Mocktests Set - 1</div>
+    <span id="timer">25:00</span>
+  </div>
+  <div class="container">
+    
+    
+
+    <div id="imgWrap" class="q-image-wrap hidden">
+      <div id="imgLoader" class="img-loader"></div>
+      <img id="qImg" class="q-image">
+    </div>
+<div class="question" id="question"></div>
+    <div id="options"></div>
+
+    <div class="nav">
+      <button id="prevBtn" onclick="prevQ()">Previous</button>
+      <button id="nextBtn" onclick="nextQ()">Next</button>
+    </div>
+
+    <div class="grid" id="grid"></div>
+    <br>
+    <button onclick="submitTest()">Submit Test</button>
+  </div>
+</div>
+
+<div id="score" class="hidden score">
+  <h3>DI SET 3</h3>
+  <p id="userScore"></p>
+  <div class="card" id="stats"></div>
+
+  <div class="filter">
+    <button class="active" onclick="filterQ('all',this)">All</button>
+    <button onclick="filterQ('correct',this)">Correct</button>
+    <button onclick="filterQ('wrong',this)">Wrong</button>
+    <button onclick="filterQ('unattempted',this)">Unattempted</button>
+  </div>
+
+  <div id="review"></div>
+  <br>
+  <button onclick="reattempt()">Reattempt</button>
+</div>
+
+<div class="popup" id="popup">
+  <div class="popup-box">
+    <p>Your previous score & rank will be replaced.</p>
+    <button onclick="confirmReattempt()">OK</button>
+  </div>
+</div>
+
+<script>
+firebase.initializeApp({
+  apiKey: "AIzaSyBskR7Iuvep9d2W4NoPMilS6jST7pCWFs8",
+  authDomain: "edumocker-pyq.firebaseapp.com",
+  projectId: "edumocker-pyq"
+});
+const db = firebase.firestore();
+
+const TEST_ID = "Di-set-3";
+const STORAGE_KEY = "RESULT_" + TEST_ID;
+const TEST_DURATION_MINUTES = 25;
+const NEGATIVE_MARK = 0.25;
+
+const user = {
+  phone: localStorage.getItem("user_phone"),
+  name: localStorage.getItem("user_name")
+};
+if(!user.phone){ alert("Login required"); throw ""; }
+
+/* ===== Added explanations to questions ===== */
+const questions = [
+
+
+
+    
+  {
+    q: "For Item A, what is the discount percentage offered on the Marked Price?<br>ବସ୍ତୁ 'A' ପାଇଁ, ଧାର୍ଯ୍ୟ ମୂଲ୍ୟ (Marked Price) ଉପରେ କେତେ ପ୍ରତିଶତ ରିହାତି ଦିଆଯାଇଛି?",
+    o: ["15% / ୧୫%", "20% / ୨୦%", "25% / ୨୫%", "10% / ୧୦%"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEg-sIPj5vuu7ylBunq7lxgUtBYCa57D3vBu4a1VFYJZISpECOnXc2lKkiH0sCOqVsxNHxc7Q1KlgIZoxk38MgrsZBBkksqHQcLBTT-2pnlfPPq9xSMaJRNPPGaydwc_JOB3-KduCv3P7FeXTgT9fYzbxBItl2TjZLIuEfACUeCHt-Vn0tcRzuSKmf5A0Erj/s320/Gemini_Generated_Image_cbqm9xcbqm9xcbqm%20%281%29.png",
+    exp: "<b>English:</b><br>CP = 800, Profit = 20%.<br>SP = 800 + (20% of 800) = 960.<br>MP = 1200.<br>Discount = MP - SP = 1200 - 960 = 240.<br>Discount % = (240/1200) * 100 = 20%.<br><br><b>ଓଡ଼ିଆ:</b><br>କିଣା ମୂଲ୍ୟ = ୮୦୦, ଲାଭ = ୨୦% |<br>ବିକ୍ରୟ ମୂଲ୍ୟ = ୮୦୦ + ୮୦୦ ର ୨୦% = ୯୬୦ |<br>ଧାର୍ଯ୍ୟ ମୂଲ୍ୟ = ୧୨୦୦ |<br>ରିହାତି = ଧାର୍ଯ୍ୟ ମୂଲ୍ୟ - ବିକ୍ରୟ ମୂଲ୍ୟ = ୧୨୦୦ - ୯୬୦ = ୨୪୦ |<br>ରିହାତି % = (୨୪୦/୧୨୦୦) * ୧୦୦ = ୨୦% |"
+  },
+  {
+    q: "If the profit percentage for Item B is 12.5%, what is the Cost Price of Item B?<br>ଯଦି ବସ୍ତୁ 'B' ର ଲାଭ ପ୍ରତିଶତ ୧୨.୫% ହୁଏ, ତେବେ ବସ୍ତୁ 'B' ର କିଣା ମୂଲ୍ୟ କେତେ?",
+    o: ["₹1100 / ଟ. ୧୧୦୦", "₹1200 / ଟ. ୧୨୦୦", "₹1250 / ଟ. ୧୨୫୦", "₹1300 / ଟ. ୧୩୦୦"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEg-sIPj5vuu7ylBunq7lxgUtBYCa57D3vBu4a1VFYJZISpECOnXc2lKkiH0sCOqVsxNHxc7Q1KlgIZoxk38MgrsZBBkksqHQcLBTT-2pnlfPPq9xSMaJRNPPGaydwc_JOB3-KduCv3P7FeXTgT9fYzbxBItl2TjZLIuEfACUeCHt-Vn0tcRzuSKmf5A0Erj/s320/Gemini_Generated_Image_cbqm9xcbqm9xcbqm%20%281%29.png",
+    exp: "<b>English:</b><br>SP = 1350, Profit = 12.5% = 1/8.<br>CP = SP * [100 / (100 + P%)]<br>CP = 1350 * (8/9) = 1200.<br><br><b>ଓଡ଼ିଆ:</b><br>ବିକ୍ରୟ ମୂଲ୍ୟ = ୧୩୫୦, ଲାଭ = ୧୨.୫% |<br>କିଣା ମୂଲ୍ୟ = ୧୩୫୦ * (୧୦୦ / ୧୧୨.୫) = ୧୨୦୦ ଟଙ୍କା |"
+  },
+  {
+    q: "For Item C, if the profit earned is ₹170, find the Marked Price of the item.<br>ବସ୍ତୁ 'C' ପାଇଁ, ଯଦି ଲାଭ ୧୭୦ ଟଙ୍କା ହୁଏ, ତେବେ ବସ୍ତୁର ଧାର୍ଯ୍ୟ ମୂଲ୍ୟ ନିର୍ଣ୍ଣୟ କରନ୍ତୁ |",
+    o: ["₹1200 / ଟ. ୧୨୦୦", "₹1300 / ଟ. ୧୩୦୦", "₹1400 / ଟ. ୧୪୦୦", "₹1500 / ଟ. ୧୫୦୦"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEg-sIPj5vuu7ylBunq7lxgUtBYCa57D3vBu4a1VFYJZISpECOnXc2lKkiH0sCOqVsxNHxc7Q1KlgIZoxk38MgrsZBBkksqHQcLBTT-2pnlfPPq9xSMaJRNPPGaydwc_JOB3-KduCv3P7FeXTgT9fYzbxBItl2TjZLIuEfACUeCHt-Vn0tcRzuSKmf5A0Erj/s320/Gemini_Generated_Image_cbqm9xcbqm9xcbqm%20%281%29.png",
+    exp: "<b>English:</b><br>CP = 1000, Profit = 170.<br>SP = CP + Profit = 1170.<br>Discount = 10%.<br>MP = SP / (1 - Discount%) = 1170 / 0.9 = 1300.<br><br><b>ଓଡ଼ିଆ:</b><br>କିଣା ମୂଲ୍ୟ = ୧୦୦୦, ଲାଭ = ୧୭୦ |<br>ବିକ୍ରୟ ମୂଲ୍ୟ = ୧୦୦୦ + ୧୭୦ = ୧୧୭୦ |<br>ରିହାତି = ୧୦% |<br>ଧାର୍ଯ୍ୟ ମୂଲ୍ୟ = ୧୧୭୦ / ୦.୯ = ୧୩୦୦ ଟଙ୍କା |"
+  },
+  {
+    q: "What is the ratio of the Cost Price of Item D to the Cost Price of Item A?<br>ବସ୍ତୁ 'D' ର କିଣା ମୂଲ୍ୟ ଏବଂ ବସ୍ତୁ 'A' ର କିଣା ମୂଲ୍ୟର ଅନୁପାତ କେତେ?",
+    o: ["2:1 / ୨:୧", "3:2 / ୩:୨", "4:5 / ୪:୫", "1:2 / ୧:୨"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEg-sIPj5vuu7ylBunq7lxgUtBYCa57D3vBu4a1VFYJZISpECOnXc2lKkiH0sCOqVsxNHxc7Q1KlgIZoxk38MgrsZBBkksqHQcLBTT-2pnlfPPq9xSMaJRNPPGaydwc_JOB3-KduCv3P7FeXTgT9fYzbxBItl2TjZLIuEfACUeCHt-Vn0tcRzuSKmf5A0Erj/s320/Gemini_Generated_Image_cbqm9xcbqm9xcbqm%20%281%29.png",
+    exp: "<b>English:</b><br>For D: SP = 1800, Profit = 12.5%.<br>CP(D) = 1800 / 1.125 = 1600.<br>For A: CP(A) = 800.<br>Ratio = 1600 : 800 = 2 : 1.<br><br><b>ଓଡ଼ିଆ:</b><br>D ପାଇଁ: ବିକ୍ରୟ ମୂଲ୍ୟ = ୧୮୦୦, ଲାଭ = ୧୨.୫% |<br>କିଣା ମୂଲ୍ୟ (D) = ୧୮୦୦ / ୧.୧୨୫ = ୧୬୦୦ |<br>A ପାଇଁ: କିଣା ମୂଲ୍ୟ (A) = ୮୦୦ |<br>ଅନୁପାତ = ୧୬୦୦ : ୮୦୦ = ୨ : ୧ |"
+  },
+  {
+    q: "For Item E, find the difference between the Marked Price and the Cost Price.<br>ବସ୍ତୁ 'E' ପାଇଁ, ଧାର୍ଯ୍ୟ ମୂଲ୍ୟ ଏବଂ କିଣା ମୂଲ୍ୟ ମଧ୍ୟରେ ପାର୍ଥକ୍ୟ କେତେ?",
+    o: ["₹600 / ଟ. ୬୦୦", "₹700 / ଟ. ୭୦୦", "₹800 / ଟ. ୮୦୦", "₹900 / ଟ. ୯୦୦"],
+    a: 2,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEg-sIPj5vuu7ylBunq7lxgUtBYCa57D3vBu4a1VFYJZISpECOnXc2lKkiH0sCOqVsxNHxc7Q1KlgIZoxk38MgrsZBBkksqHQcLBTT-2pnlfPPq9xSMaJRNPPGaydwc_JOB3-KduCv3P7FeXTgT9fYzbxBItl2TjZLIuEfACUeCHt-Vn0tcRzuSKmf5A0Erj/s320/Gemini_Generated_Image_cbqm9xcbqm9xcbqm%20%281%29.png",
+    exp: "<b>English:</b><br>SP = 1500, Discount = 25%.<br>MP = 1500 / 0.75 = 2000.<br>CP = 1200.<br>Difference = 2000 - 1200 = 800.<br><br><b>ଓଡ଼ିଆ:</b><br>ବିକ୍ରୟ ମୂଲ୍ୟ = ୧୫୦୦, ରିହାତି = ୨୫% |<br>ଧାର୍ଯ୍ୟ ମୂଲ୍ୟ = ୧୫୦୦ / ୦.୭୫ = ୨୦୦୦ |<br>କିଣା ମୂଲ୍ୟ = ୧୨୦୦ |<br>ପାର୍ଥକ୍ୟ = ୨୦୦୦ - ୧୨୦୦ = ୮୦୦ ଟଙ୍କା |"
+  },
+
+
+
+
+    
+  
+  {
+    q: "What is the efficiency (units per hour) of Charlie, given that her efficiency is constant throughout the working hours?<br>ଚାର୍ଲିଙ୍କ ଦକ୍ଷତା (ଘଣ୍ଟା ପ୍ରତି ୟୁନିଟ୍) କେତେ, ଯଦି ତାଙ୍କର ଦକ୍ଷତା ସମସ୍ତ କାର୍ଯ୍ୟ ସମୟ ମଧ୍ୟରେ ସ୍ଥିର ରହେ?",
+    o: ["12.5 / ୧୨.୫", "16.0 / ୧୬.୦", "18.0 / ୧୮.୦", "20.0 / ୨୦.୦", "15.0 / ୧୫.୦"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj9BZKILsKUVDM-mHdOrCyxON7Fb0RaoUaC9xteM_JofpDH3BFUIounaH2TU4dRI7CLO0rFt2CEXdU_XvH-IHv48dWp4jzdzHY8aJXxa37QYC4JuB-NWgaOmkKe3CLhXUI2S0yy25NN9gyaX8hbYgN1gklBXXjR2J5vVp0z8IYrDnyQDQAJIThazE_CKh8f/s320/Gemini_Generated_Image_sust0bsust0bsust%20%281%29.png",
+    exp: "<b>English:</b><br>Charlie's Work = 20% of 60,000 = 12,000 units.<br>Charlie's Hours = 25% of 3,000 = 750 hours.<br>Efficiency = Work / Time = 12,000 / 750 = 16 units/hr.<br><br><b>ଓଡ଼ିଆ:</b><br>ଚାର୍ଲିଙ୍କ କାର୍ଯ୍ୟ = ୬୦,୦୦୦ ର ୨୦% = ୧୨,୦୦୦ ୟୁନିଟ୍ |<br>ଚାର୍ଲିଙ୍କ ସମୟ = ୩,୦୦୦ ର ୨୫% = ୭୫୦ ଘଣ୍ଟା |<br>ଦକ୍ଷତା = କାର୍ଯ୍ୟ / ସମୟ = ୧୨,୦୦୦ / ୭୫୦ = ୧୬ ୟୁନିଟ୍/ଘଣ୍ଟା |"
+  },
+  {
+    q: "Who is the most efficient person among the five?<br>ପାଞ୍ଚଜଣଙ୍କ ମଧ୍ୟରେ ସବୁଠାରୁ ଦକ୍ଷ ବ୍ୟକ୍ତି କିଏ?",
+    o: ["Alice / ଆଲିସ୍", "Bob / ବବ୍", "Charlie / ଚାର୍ଲି", "David / ଡେଭିଡ୍", "Eva / ଇଭା"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj9BZKILsKUVDM-mHdOrCyxON7Fb0RaoUaC9xteM_JofpDH3BFUIounaH2TU4dRI7CLO0rFt2CEXdU_XvH-IHv48dWp4jzdzHY8aJXxa37QYC4JuB-NWgaOmkKe3CLhXUI2S0yy25NN9gyaX8hbYgN1gklBXXjR2J5vVp0z8IYrDnyQDQAJIThazE_CKh8f/s320/Gemini_Generated_Image_sust0bsust0bsust%20%281%29.png",
+    exp: "<b>English:</b><br>Efficiency = (Work% / Hour%) * (60k/3k).<br>Alice: 15/10 = 1.5 ratio.<br>Bob: 25/20 = 1.25 ratio.<br>Charlie: 20/25 = 0.8 ratio.<br>David: 10/15 = 0.66 ratio.<br>Eva: 30/30 = 1.0 ratio.<br>Alice has the highest ratio (1.5), making her the most efficient (30 units/hr).<br><br><b>ଓଡ଼ିଆ:</b><br>ଦକ୍ଷତା = (କାର୍ଯ୍ୟ% / ସମୟ%) |<br>ଆଲିସ୍: ୧୫/୧୦ = ୧.୫ ଅନୁପାତ |<br>ଆଲିସ୍‌ଙ୍କ ଅନୁପାତ ସର୍ବାଧିକ, ତେଣୁ ସେ ସବୁଠାରୁ ଦକ୍ଷ |"
+  },
+  {
+    q: "What is the ratio of the efficiency of Bob to the efficiency of David?<br>ବବ୍‌ଙ୍କ ଦକ୍ଷତା ଏବଂ ଡେଭିଡଙ୍କ ଦକ୍ଷତାର ଅନୁପାତ କେତେ?",
+    o: ["3:2 / ୩:୨", "4:3 / ୪:୩", "5:4 / ୫:୪", "15:8 / ୧୫:୮", "12:5 / ୧୨:୫"],
+    a: 3,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj9BZKILsKUVDM-mHdOrCyxON7Fb0RaoUaC9xteM_JofpDH3BFUIounaH2TU4dRI7CLO0rFt2CEXdU_XvH-IHv48dWp4jzdzHY8aJXxa37QYC4JuB-NWgaOmkKe3CLhXUI2S0yy25NN9gyaX8hbYgN1gklBXXjR2J5vVp0z8IYrDnyQDQAJIThazE_CKh8f/s320/Gemini_Generated_Image_sust0bsust0bsust%20%281%29.png",
+    exp: "<b>English:</b><br>Bob Efficiency = 15,000 / 600 = 25 units/hr.<br>David Efficiency = 6,000 / 450 = 13.33 units/hr (or 40/3).<br>Ratio = 25 : (40/3) = 75 : 40 = 15 : 8.<br><br><b>ଓଡ଼ିଆ:</b><br>ବବ୍ ଦକ୍ଷତା = ୨୫ ୟୁନିଟ୍/ଘଣ୍ଟା |<br>ଡେଭିଡ ଦକ୍ଷତା = ୪୦/୩ ୟୁନିଟ୍/ଘଣ୍ଟା |<br>ଅନୁପାତ = ୨୫ : ୪୦/୩ = ୭୫ : ୪୦ = ୧୫ : ୮ |"
+  },
+  {
+    q: "If David completes his work in 20% fewer hours (360 hrs), what is his new efficiency?<br>ଯଦି ଡେଭିଡ୍ ନିଜ କାର୍ଯ୍ୟକୁ ୨୦% କମ୍ ସମୟ (୩୬୦ ଘଣ୍ଟା) ମଧ୍ୟରେ ଶେଷ କରନ୍ତି, ତେବେ ତାଙ୍କର ନୂତନ ଦକ୍ଷତା କେତେ?",
+    o: ["15.00 / ୧୫.୦୦", "16.66 / ୧୬.୬୬", "18.33 / ୧୮.୩୩", "20.00 / ୨୦.୦୦", "25.00 / ୨୫.୦୦"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj9BZKILsKUVDM-mHdOrCyxON7Fb0RaoUaC9xteM_JofpDH3BFUIounaH2TU4dRI7CLO0rFt2CEXdU_XvH-IHv48dWp4jzdzHY8aJXxa37QYC4JuB-NWgaOmkKe3CLhXUI2S0yy25NN9gyaX8hbYgN1gklBXXjR2J5vVp0z8IYrDnyQDQAJIThazE_CKh8f/s320/Gemini_Generated_Image_sust0bsust0bsust%20%281%29.png",
+    exp: "<b>English:</b><br>David's total work = 6,000 units.<br>New Time = 360 hours.<br>New Efficiency = 6,000 / 360 = 16.66 units/hr.<br><br><b>ଓଡ଼ିଆ:</b><br>ଡେଭିଡଙ୍କ ମୋଟ କାର୍ଯ୍ୟ = ୬,୦୦୦ ୟୁନିଟ୍ |<br>ନୂତନ ସମୟ = ୩୬୦ ଘଣ୍ଟା |<br>ନୂତନ ଦକ୍ଷତା = ୬,୦୦୦ / ୩୬୦ = ୧୬.୬୬ ୟୁନିଟ୍/ଘଣ୍ଟା |"
+  },
+  {
+    q: "How many units of work does Eva complete in total?<br>ଇଭା ମୋଟ କେତେ ୟୁନିଟ୍ କାର୍ଯ୍ୟ ସମ୍ପୂର୍ଣ୍ଣ କରନ୍ତି?",
+    o: ["15,000 / ୧୫,୦୦୦", "12,000 / ୧୨,୦୦୦", "18,000 / ୧୮,୦୦୦", "20,000 / ୨୦,୦୦୦", "9,000 / ୯,୦୦୦"],
+    a: 2,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj9BZKILsKUVDM-mHdOrCyxON7Fb0RaoUaC9xteM_JofpDH3BFUIounaH2TU4dRI7CLO0rFt2CEXdU_XvH-IHv48dWp4jzdzHY8aJXxa37QYC4JuB-NWgaOmkKe3CLhXUI2S0yy25NN9gyaX8hbYgN1gklBXXjR2J5vVp0z8IYrDnyQDQAJIThazE_CKh8f/s320/Gemini_Generated_Image_sust0bsust0bsust%20%281%29.png",
+    exp: "<b>English:</b><br>Total Work = 60,000 units.<br>Eva's share = 30% of total work.<br>Work = 0.30 * 60,000 = 18,000 units.<br><br><b>ଓଡ଼ିଆ:</b><br>ମୋଟ କାର୍ଯ୍ୟ = ୬୦,୦୦୦ ୟୁନିଟ୍ |<br>ଇଭାଙ୍କ ଅଂଶ = ମୋଟ କାର୍ଯ୍ୟର ୩୦% |<br>କାର୍ଯ୍ୟ = ୬୦,୦୦୦ ର ୩୦% = ୧୮,୦୦୦ ୟୁନିଟ୍ |"
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+];
+/* ===== End questions with explanations ===== */
+
+let answers={}, index=0, timeLeft, timerInt;
+
+window.onload = () => {
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+  if(saved){
+    if(saved.answers) answers = saved.answers; // restore previous answers
+    showScore(saved);
+  } else {
+    loader.classList.add("hidden");
+    instruction.classList.remove("hidden");
+  }
+};
+
+function startTest(){
+  instruction.classList.add("hidden");
+  test.classList.remove("hidden");
+  timeLeft=TEST_DURATION_MINUTES*60;
+  timerInt=setInterval(runTimer,1000);
+  buildGrid();loadQ();
+}
+
+function runTimer(){
+  if(timeLeft<=0){submitTest();return;}
+  timeLeft--;
+  timer.innerText=`${String(Math.floor(timeLeft/60)).padStart(2,"0")}:${String(timeLeft%60).padStart(2,"0")}`;
+}
+
+function loadQ(){
+  const q = questions[index];
+  question.innerHTML = (index + 1) + ". " + q.q;
+
+  /* ===== IMAGE LOGIC ===== */
+  imgWrap.classList.add("hidden");
+  qImg.style.display = "none";
+  imgLoader.style.display = "block";
+
+  if(q.img){
+    imgWrap.classList.remove("hidden");
+    qImg.src = q.img;
+
+    qImg.onload = () => {
+      imgLoader.style.display = "none";
+      qImg.style.display = "block";
+    };
+
+    qImg.onerror = () => {
+      imgWrap.classList.add("hidden");
+    };
+  }
+
+  options.innerHTML="";
+  q.o.forEach((t,i)=>{
+    const d=document.createElement("div");
+    d.className="option"+(answers[index]===i?" selected":"");
+    d.innerText=t;
+    d.onclick=()=>{
+      answers[index]=answers[index]===i?null:i;
+
+      /* ===== Save answers to localStorage ===== */
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+      saved.answers = answers;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+      /* ===== End save ===== */
+
+      loadQ();
+      updateGrid();
+    };
+    options.appendChild(d);
+  });
+
+  prevBtn.disabled = index === 0;
+  nextBtn.disabled = index === questions.length - 1;
+}
+
+function nextQ(){index++;loadQ();}
+function prevQ(){index--;loadQ();}
+
+function buildGrid(){
+  grid.innerHTML="";
+  questions.forEach((_,i)=>{
+    const d=document.createElement("div");
+    d.innerText=i+1;
+    d.onclick=()=>{index=i;loadQ();};
+    grid.appendChild(d);
+  });
+}
+
+function updateGrid(){
+  [...grid.children].forEach((d,i)=>d.classList.toggle("attempted",answers[i]!=null));
+}
+
+function submitTest(){
+  clearInterval(timerInt);
+  test.classList.add("hidden");
+  loader.classList.remove("hidden");
+  loader.querySelector("p").innerText="Saving score & calculating rank…";
+
+  let correct=0,wrong=0;
+  questions.forEach((q,i)=>{
+    if(answers[i]==null)return;
+    answers[i]===q.a?correct++:wrong++;
+  });
+
+  const score=+(correct-wrong*NEGATIVE_MARK).toFixed(2);
+
+  const baseData={
+    phone:user.phone,
+    name:user.name,
+    score,correct,wrong,
+    unattempted:questions.length-correct-wrong,
+    updatedAt:Date.now()
+  };
+
+  db.collection("tests").doc(TEST_ID).collection("results").doc(user.phone)
+  .set(baseData,{merge:true})
+  .then(()=>calculateRank(baseData));
+}
+
+function calculateRank(myData){
+  db.collection("tests").doc(TEST_ID).collection("results").get()
+  .then(snap=>{
+    const arr=snap.docs.map(d=>({...d.data(),id:d.id}));
+    arr.sort((a,b)=>b.score-a.score);
+    const rank=arr.findIndex(x=>x.id===user.phone)+1;
+    myData.rankText=`${rank} / ${arr.length}`;
+    myData.answers=answers;
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(myData));
+    showScore(myData);
+  });
+}
+
+function showScore(r){
+  loader.classList.add("hidden");
+  score.classList.remove("hidden");
+  userScore.innerText=`Hi ${r.name}, your score is ${r.score}`;
+  stats.innerHTML=`Correct: ${r.correct}<br>Wrong: ${r.wrong}<br>Unattempted: ${r.unattempted}<br><b>Rank: ${r.rankText}</b>`;
+  filterQ("all",document.querySelector(".filter button"));
+}
+
+function filterQ(type,btn){
+  document.querySelectorAll(".filter button").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  review.innerHTML="";
+  questions.forEach((q,i)=>{
+    const a=answers[i];
+    if(type==="correct"&&a!==q.a)return;
+    if(type==="wrong"&&(a==null||a===q.a))return;
+    if(type==="unattempted"&&a!=null)return;
+    const c=document.createElement("div");
+    c.className="card";
+    c.innerHTML=`
+      <b>${q.q}</b><br>
+      Your: ${a!=null?q.o[a]:"—"}<br>
+      Correct: ${q.o[q.a]}<br>
+      <details>
+        <summary>Show Explanation</summary>
+        <p>${q.exp || "No explanation provided."}</p>
+      </details>
+    `;
+    review.appendChild(c);
+  });
+}
+
+function reattempt(){popup.style.display="flex";}
+function confirmReattempt(){localStorage.removeItem(STORAGE_KEY);location.reload();}
+</script>
+</body>
+</html>
