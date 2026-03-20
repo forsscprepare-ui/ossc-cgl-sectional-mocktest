@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EduMocker Test</title>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<style>
+  .q-image-wrap{margin:12px 0;display:flex;justify-content:center;align-items:center}
+  .img-loader{width:50px;height:50px;border:5px solid #ddd;border-top:5px solid #2c5364;border-radius:50%;animation:spin 1s linear infinite}
+  .q-image{max-width:100%;border-radius:12px;display:none}
+  *{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}
+  body{margin:0;background:#f4f6f8;padding:0}
+  .loader{height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center}
+  .circle{width:70px;height:70px;border:7px solid #ddd;border-top:7px solid #2c5364;border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .hidden{display:none}
+  .header{background:#fff;padding:12px;display:flex;justify-content:space-between;border-bottom:1px solid #ddd}
+  .container{padding:14px}
+  button{padding:12px;border:none;border-radius:10px;background:#2c5364;color:#fff;font-size:15px;cursor:pointer}
+  button:disabled{opacity:.4}
+  .q-inst{font-size:14px}
+  .question{font-weight:bold;margin:8px 0}
+  .option{background:#fff;border:1px solid #ccc;padding:12px;border-radius:10px;margin-bottom:10px;cursor:pointer}
+  .option.selected{background:#e8f1f5;border-color:#2c5364}
+  .nav{display:flex;justify-content:space-between;margin:10px 0}
+  .grid{display:flex;flex-wrap:wrap;gap:6px}
+  .grid div{width:32px;height:32px;border:1px solid #2c5364;display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .grid .attempted{background:#2c5364;color:#fff;border-radius:50%}
+  .score{padding:16px}
+  .card{background:#fff;padding:12px;border-radius:12px;margin-bottom:10px}
+  .filter{display:flex;gap:6px;margin-top:10px}
+  .filter button{flex:1;background:#ccc;color:#000}
+  .filter .active{background:#2c5364;color:#fff}
+  .popup{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;justify-content:center;align-items:center}
+  .popup-box{background:#fff;padding:18px;border-radius:14px;width:85%;text-align:center}
+</style>
+</head>
+<body>
+
+<div id="loader" class="loader">
+  <div class="circle"></div>
+  <p>Checking user…</p>
+</div>
+
+<div id="instruction" class="hidden container">
+  <h3>DI Sectional Mocktests Set - 4</h3>
+  <ul>
+    <li>Time: 25 Minutes</li>
+    <li>Negative Marking: 0.25 per wrong answer</li>
+    <li>Submit anytime</li>
+  </ul>
+  <button onclick="startTest()">Start Test</button>
+</div>
+
+<div id="test" class="hidden">
+  <div class="header">
+    <b></b>
+      <div class="q-inst">DI Sectional Mocktests Set - 4</div>
+    <span id="timer">25:00</span>
+  </div>
+  <div class="container">
+    
+    
+
+    <div id="imgWrap" class="q-image-wrap hidden">
+      <div id="imgLoader" class="img-loader"></div>
+      <img id="qImg" class="q-image">
+    </div>
+<div class="question" id="question"></div>
+    <div id="options"></div>
+
+    <div class="nav">
+      <button id="prevBtn" onclick="prevQ()">Previous</button>
+      <button id="nextBtn" onclick="nextQ()">Next</button>
+    </div>
+
+    <div class="grid" id="grid"></div>
+    <br>
+    <button onclick="submitTest()">Submit Test</button>
+  </div>
+</div>
+
+<div id="score" class="hidden score">
+  <h3>DI Sectional SET 4</h3>
+  <p id="userScore"></p>
+  <div class="card" id="stats"></div>
+
+  <div class="filter">
+    <button class="active" onclick="filterQ('all',this)">All</button>
+    <button onclick="filterQ('correct',this)">Correct</button>
+    <button onclick="filterQ('wrong',this)">Wrong</button>
+    <button onclick="filterQ('unattempted',this)">Unattempted</button>
+  </div>
+
+  <div id="review"></div>
+  <br>
+  <button onclick="reattempt()">Reattempt</button>
+</div>
+
+<div class="popup" id="popup">
+  <div class="popup-box">
+    <p>Your previous score & rank will be replaced.</p>
+    <button onclick="confirmReattempt()">OK</button>
+  </div>
+</div>
+
+<script>
+firebase.initializeApp({
+  apiKey: "AIzaSyBskR7Iuvep9d2W4NoPMilS6jST7pCWFs8",
+  authDomain: "edumocker-pyq.firebaseapp.com",
+  projectId: "edumocker-pyq"
+});
+const db = firebase.firestore();
+
+const TEST_ID = "Di-set--4";
+const STORAGE_KEY = "RESULT_" + TEST_ID;
+const TEST_DURATION_MINUTES = 25;
+const NEGATIVE_MARK = 0.25;
+
+const user = {
+  phone: localStorage.getItem("user_phone"),
+  name: localStorage.getItem("user_name")
+};
+if(!user.phone){ alert("Login required"); throw ""; }
+
+/* ===== Added explanations to questions ===== */
+const questions = [
+
+
+  {
+    q: "What is the total number of Children who read the Regional language?<br>ଆଞ୍ଚଳିକ ଭାଷା ପଢୁଥିବା ପିଲାମାନଙ୍କର ମୋଟ ସଂଖ୍ୟା କେତେ?",
+    o: ["210 / ୨୧୦", "240 / ୨୪୦", "270 / ୨୭୦", "300 / ୩୦୦"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEideayKePdoOCrYmvPq_18NsScjiRYKOYrQy6TAzKIm51iZ2feLCR0EFwPxymSWKNuVY9WECb25dVJZ2h3PnVAd3JKfwfyNiGEQ1IQV9DY9SGCj8dqEFItTgLPUXvusgimaiH9jmUOeM9rotZjSHWdacm4w2jIbeOebougt80X2BNku8eLGMsZx6pR3Lyrr/s1600/qwer.jpg",
+    exp: "Total Children = 600. <br> Only Regional = 10% of 600 = 60. <br> All three = 5% of 600 = 30. <br> Let (Eng + Reg) and (Hindi + Reg) be 'x'. <br> 120 + 90 + 60 + 150 + 30 + 2x = 600 => 2x = 150 => x = 75. <br> Total Regional = 60 + 30 + 75 + 75 = 240.<br><br>ମୋଟ ପିଲା = ୬୦୦ | <br> କେବଳ ଆଞ୍ଚଳିକ = ୬୦ | <br> ତିନୋଟିଯାକ ଭାଷା = ୩୦ | <br> ଇଂରାଜୀ + ଆଞ୍ଚଳିକ (x) ଏବଂ ହିନ୍ଦୀ + ଆଞ୍ଚଳିକ (x) | <br> ସମୀକରଣ ଅନୁଯାୟୀ x = ୭୫ | <br> ମୋଟ ଆଞ୍ଚଳିକ ପାଠକ = ୬୦ + ୩୦ + ୭୫ + ୭୫ = ୨୪୦ |"
+  },
+  {
+    q: "The number of Adults who read only Hindi is what percent of the Seniors who read English?<br>କେବଳ ହିନ୍ଦୀ ପଢୁଥିବା ବୟସ୍କଙ୍କ ସଂଖ୍ୟା, ଇଂରାଜୀ ପଢୁଥିବା ବରିଷ୍ଠ ନାଗରିକଙ୍କ ସଂଖ୍ୟାର କେତେ ପ୍ରତିଶତ?",
+    o: ["40% / ୪୦%", "50% / ୫୦%", "60% / ୬୦%", "25% / ୨୫%"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEideayKePdoOCrYmvPq_18NsScjiRYKOYrQy6TAzKIm51iZ2feLCR0EFwPxymSWKNuVY9WECb25dVJZ2h3PnVAd3JKfwfyNiGEQ1IQV9DY9SGCj8dqEFItTgLPUXvusgimaiH9jmUOeM9rotZjSHWdacm4w2jIbeOebougt80X2BNku8eLGMsZx6pR3Lyrr/s1600/qwer.jpg",
+    exp: "Adults only Hindi = 20% of 1000 = 200. <br> Seniors English = (5/10) of 800 = 400. <br> Percentage = (200 / 400) * 100 = 50%.<br><br>କେବଳ ହିନ୍ଦୀ ପଢୁଥିବା ବୟସ୍କ = ୧୦୦୦ ର ୨୦% = ୨୦୦ | <br> ଇଂରାଜୀ ପଢୁଥିବା ବରିଷ୍ଠ = ୮୦୦ ର ୫/୧୦ = ୪୦୦ | <br> ପ୍ରତିଶତ = (୨୦୦ / ୪୦୦) * ୧୦୦ = ୫୦% |"
+  },
+  {
+    q: "What is the difference between the total members who read only English and total members who read only Hindi across all three categories?<br>ତିନୋଟିଯାକ ବର୍ଗରେ କେବଳ ଇଂରାଜୀ ପଢୁଥିବା ସଦସ୍ୟ ଏବଂ କେବଳ ହିନ୍ଦୀ ପଢୁଥିବା ସଦସ୍ୟଙ୍କ ମଧ୍ୟରେ ପାର୍ଥକ୍ୟ କେତେ?",
+    o: ["380 / ୩୮୦", "420 / ୪୨୦", "390 / ୩୯୦", "450 / ୪୫୦"],
+    a: 2,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEideayKePdoOCrYmvPq_18NsScjiRYKOYrQy6TAzKIm51iZ2feLCR0EFwPxymSWKNuVY9WECb25dVJZ2h3PnVAd3JKfwfyNiGEQ1IQV9DY9SGCj8dqEFItTgLPUXvusgimaiH9jmUOeM9rotZjSHWdacm4w2jIbeOebougt80X2BNku8eLGMsZx6pR3Lyrr/s1600/qwer.jpg",
+    exp: "Only English: Children(120) + Adults(400) + Seniors(400) = 920. <br> Only Hindi: Children(90) + Adults(200) + Seniors(240) = 530. <br> Difference = 920 - 530 = 390.<br><br>କେବଳ ଇଂରାଜୀ: ପିଲା(୧୨୦) + ବୟସ୍କ(୪୦୦) + ବରିଷ୍ଠ(୪୦୦) = ୯୨୦ | <br> କେବଳ ହିନ୍ଦୀ: ପିଲା(୯୦) + ବୟସ୍କ(୨୦୦) + ବରିଷ୍ଠ(୨୪୦) = ୫୩୦ | <br> ପାର୍ଥକ୍ୟ = ୯୨୦ - ୫୩୦ = ୩୯୦ |"
+  },
+  {
+    q: "If 10% of the Seniors who read Regional language switch to reading only English, what will be the new ratio of Seniors reading English to Seniors reading Regional?<br>ଯଦି ଆଞ୍ଚଳିକ ଭାଷା ପଢୁଥିବା ୧୦% ବରିଷ୍ଠ ନାଗରିକ କେବଳ ଇଂରାଜୀ ପଢିବାକୁ ପରିବର୍ତ୍ତନ କରନ୍ତି, ତେବେ ଇଂରାଜୀ ପଢୁଥିବା ବରିଷ୍ଠ ଏବଂ ଆଞ୍ଚଳିକ ପଢୁଥିବା ବରିଷ୍ଠଙ୍କ ନୂତନ ଅନୁପାତ କେତେ ହେବ?",
+    o: ["26 : 9", "13 : 4", "51 : 18", "21 : 8"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEideayKePdoOCrYmvPq_18NsScjiRYKOYrQy6TAzKIm51iZ2feLCR0EFwPxymSWKNuVY9WECb25dVJZ2h3PnVAd3JKfwfyNiGEQ1IQV9DY9SGCj8dqEFItTgLPUXvusgimaiH9jmUOeM9rotZjSHWdacm4w2jIbeOebougt80X2BNku8eLGMsZx6pR3Lyrr/s1600/qwer.jpg",
+    exp: "Original Seniors: Eng = 400, Reg = 160. <br> 10% of 160 = 16 people switch. <br> New Eng = 400 + 16 = 416. New Reg = 160 - 16 = 144. <br> Ratio = 416 : 144 = 26 : 9.<br><br>ପୂର୍ବରୁ ବରିଷ୍ଠ: ଇଂରାଜୀ = ୪୦୦, ଆଞ୍ଚଳିକ = ୧୬୦ | <br> ୧୬୦ ର ୧୦% = ୧୬ ଜଣ ପରିବର୍ତ୍ତନ କଲେ | <br> ନୂତନ ଇଂରାଜୀ = ୪୧୬, ନୂତନ ଆଞ୍ଚଳିକ = ୧୪୪ | <br> ଅନୁପାତ = ୪୧୬ : ୧୪୪ = ୨୬ : ୯ |"
+  },
+  {
+    q: "How many Children read at least two languages?<br>କେତେ ପିଲା ଅତି କମରେ ଦୁଇଟି ଭାଷା ପଢନ୍ତି?",
+    o: ["180 / ୧୮୦", "240 / ୨୪୦", "330 / ୩୩୦", "300 / ୩୦୦"],
+    a: 2,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEideayKePdoOCrYmvPq_18NsScjiRYKOYrQy6TAzKIm51iZ2feLCR0EFwPxymSWKNuVY9WECb25dVJZ2h3PnVAd3JKfwfyNiGEQ1IQV9DY9SGCj8dqEFItTgLPUXvusgimaiH9jmUOeM9rotZjSHWdacm4w2jIbeOebougt80X2BNku8eLGMsZx6pR3Lyrr/s1600/qwer.jpg",
+    exp: "At least two = (Eng+Hindi) + (Eng+Reg) + (Hindi+Reg) + (All three). <br> 150 + 75 + 75 + 30 = 330.<br><br>ଅତି କମରେ ଦୁଇଟି ଭାଷା = (ଇଂରାଜୀ+ହିନ୍ଦୀ) + (ଇଂରାଜୀ+ଆଞ୍ଚଳିକ) + (ହିନ୍ଦୀ+ଆଞ୍ଚଳିକ) + (ତିନୋଟିଯାକ) | <br> ୧୫୦ + ୭୫ + ୭୫ + ୩୦ = ୩୩୦ |"
+  },
+
+    
+  {
+    q: "What is the total number of Male employees working in the IT and HR departments together?<br>IT ଏବଂ HR ବିଭାଗରେ ମିଶିକି କାର୍ଯ୍ୟ କରୁଥିବା ମୋଟ ପୁରୁଷ କର୍ମଚାରୀଙ୍କ ସଂଖ୍ୟା କେତେ?",
+    o: ["480 / ୪୮୦", "504 / ୫୦୪", "540 / ୫୪୦", "450 / ୪୫୦"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjnjpRoUslSd9R5J6-SZiLId8fXtJJZqLVCHRjVWYrxAK7JltdCleJUwlxOvRvIDRyyTGNqLQ4CuK1E3WVZLZm6cPldKSeguVk0J6Hsq0LSW-wFowuOPnw7XC6p3UEsbwMxlkZ3Hx0wFTDB0qToYyTE1pokywHisZdt0eu49hksNZK9ad0N53DZTTo_S5i0/s1600/Screenshot%202026-03-20%2012.16.06%20PM.png",
+    exp: "<b>English:</b><br>Total employees = 2400.<br>IT: 25% of 2400 = 600. Female = 40%, so Male = 60% of 600 = 360.<br>HR: 15% of 2400 = 360. Female = 60%, so Male = 40% of 360 = 144.<br>Total Male (IT+HR) = 360 + 144 = 504.<br><br><b>Odia:</b><br>ମୋଟ କର୍ମଚାରୀ = ୨୪୦୦ |<br>IT: ୨୪୦୦ ର ୨୫% = ୬୦୦ | ମହିଳା = ୪୦%, ତେଣୁ ପୁରୁଷ = ୬୦୦ ର ୬୦% = ୩୬୦ |<br>HR: ୨୪୦୦ ର ୧୫% = ୩୬୦ | ମହିଳା = ୬୦%, ତେଣୁ ପୁରୁଷ = ୩୬୦ ର ୪୦% = ୧୪୪ |<br>ମୋଟ ପୁରୁଷ (IT+HR) = ୩୬୦ + ୧୪୪ = ୫୦୪ |"
+  },
+  {
+    q: "The number of Female employees in the Marketing department is what percent of the total number of employees in the Operations department?<br>ମାର୍କେଟିଂ ବିଭାଗରେ ମହିଳା କର୍ମଚାରୀଙ୍କ ସଂଖ୍ୟା, ଅପରେସନ୍ ବିଭାଗର ମୋଟ କର୍ମଚାରୀଙ୍କ ସଂଖ୍ୟାର କେତେ ପ୍ରତିଶତ?",
+    o: ["55% / ୫୫%", "40% / ୪୦%", "50% / ୫୦%", "45% / ୪୫%"],
+    a: 2,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjnjpRoUslSd9R5J6-SZiLId8fXtJJZqLVCHRjVWYrxAK7JltdCleJUwlxOvRvIDRyyTGNqLQ4CuK1E3WVZLZm6cPldKSeguVk0J6Hsq0LSW-wFowuOPnw7XC6p3UEsbwMxlkZ3Hx0wFTDB0qToYyTE1pokywHisZdt0eu49hksNZK9ad0N53DZTTo_S5i0/s1600/Screenshot%202026-03-20%2012.16.06%20PM.png",
+    exp: "<b>English:</b><br>Marketing Total = 20% of 2400 = 480. Female = 45% of 480 = 216.<br>Operations Total = 18% of 2400 = 432.<br>Percentage = (216 / 432) × 100 = 50%.<br><br><b>Odia:</b><br>ମାର୍କେଟିଂ ମୋଟ = ୨୪୦୦ ର ୨୦% = ୪୮୦ | ମହିଳା = ୪୮୦ ର ୪୫% = ୨୧୬ |<br>ଅପରେସନ୍ ମୋଟ = ୨୪୦୦ ର ୧୮% = ୪୩୨ |<br>ପ୍ରତିଶତ = (୨୧୬ / ୪୩୨) × ୧୦୦ = ୫୦% |"
+  },
+  {
+    q: "What is the ratio of the number of Male employees in the Finance department to the number of Female employees in the Operations department?<br>ଫାଇନାନ୍ସ ବିଭାଗର ପୁରୁଷ କର୍ମଚାରୀଙ୍କ ସଂଖ୍ୟା ଏବଂ ଅପରେସନ୍ ବିଭାଗର ମହିଳା କର୍ମଚାରୀଙ୍କ ସଂଖ୍ୟାର ଅନୁପାତ କେତେ?",
+    o: ["22 : 11", "55 : 33", "110 : 63", "121 : 65"],
+    a: 2,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjnjpRoUslSd9R5J6-SZiLId8fXtJJZqLVCHRjVWYrxAK7JltdCleJUwlxOvRvIDRyyTGNqLQ4CuK1E3WVZLZm6cPldKSeguVk0J6Hsq0LSW-wFowuOPnw7XC6p3UEsbwMxlkZ3Hx0wFTDB0qToYyTE1pokywHisZdt0eu49hksNZK9ad0N53DZTTo_S5i0/s1600/Screenshot%202026-03-20%2012.16.06%20PM.png",
+    exp: "<b>English:</b><br>Finance Total = 22% of 2400 = 528. Male = 50% of 528 = 264.<br>Operations Total = 18% of 2400 = 432. Female = 35% of 432 = 151.2.<br>Ratio = 264 : 151.2 = 2640 : 1512. Dividing by 24 = 110 : 63.<br><br><b>Odia:</b><br>ଫାଇନାନ୍ସ ମୋଟ = ୨୪୦୦ ର ୨୨% = ୫୨୮ | ପୁରୁଷ = ୫୨୮ ର ୫୦% = ୨୬୪ |<br>ଅପରେସନ୍ ମୋଟ = ୨୪୦୦ ର ୧୮% = ୪୩୨ | ମହିଳା = ୪୩୨ ର ୩୫% = ୧୫୧.୨ |<br>ଅନୁପାତ = ୨୬୪ : ୧୫୧.୨ = ୨୬୪୦ : ୧୫୧୨ | ୨୪ ଦ୍ୱାରା ଭାଗ କଲେ = ୧୧୦ : ୬୩ |"
+  },
+  {
+    q: "Find the difference between the average number of employees in IT, HR, and Marketing departments and the total number of Female employees in the Finance department.<br>IT, HR ଏବଂ ମାର୍କେଟିଂ ବିଭାଗର ହାରାହାରି କର୍ମଚାରୀ ସଂଖ୍ୟା ଏବଂ ଫାଇନାନ୍ସ ବିଭାଗର ମୋଟ ମହିଳା କର୍ମଚାରୀଙ୍କ ସଂଖ୍ୟା ମଧ୍ୟରେ ପାର୍ଥକ୍ୟ ନିର୍ଣ୍ଣୟ କରନ୍ତୁ |",
+    o: ["160 / ୧୬୦", "216 / ୨୧୬", "180 / ୧୮୦", "200 / ୨୦୦"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjnjpRoUslSd9R5J6-SZiLId8fXtJJZqLVCHRjVWYrxAK7JltdCleJUwlxOvRvIDRyyTGNqLQ4CuK1E3WVZLZm6cPldKSeguVk0J6Hsq0LSW-wFowuOPnw7XC6p3UEsbwMxlkZ3Hx0wFTDB0qToYyTE1pokywHisZdt0eu49hksNZK9ad0N53DZTTo_S5i0/s1600/Screenshot%202026-03-20%2012.16.06%20PM.png",
+    exp: "<b>English:</b><br>IT + HR + Mkt = (25% + 15% + 20%) of 2400 = 60% of 2400 = 1440.<br>Average = 1440 / 3 = 480.<br>Finance Female = 50% of (22% of 2400) = 264.<br>Difference = 480 - 264 = 216.<br><br><b>Odia:</b><br>IT + HR + Mkt = ୨୪୦୦ ର (୨୫% + ୧୫% + ୨୦%) = ୨୪୦୦ ର ୬୦% = ୧୪୪୦ |<br>ହାରାହାରି = ୧୪୪୦ / ୩ = ୪୮୦ |<br>ଫାଇନାନ୍ସ ମହିଳା = ୨୪୦୦ ର ୨୨% ର ୫୦% = ୨୬୪ |<br>ପାର୍ଥକ୍ୟ = ୪୮୦ - ୨୬୪ = ୨୧୬ |"
+  },
+  {
+    q: "If 20% of the Male employees from the Operations department are transferred to the IT department, what will be the new total number of employees in the IT department?<br>ଯଦି ଅପରେସନ୍ ବିଭାଗର ୨୦% ପୁରୁଷ କର୍ମଚାରୀଙ୍କୁ IT ବିଭାଗକୁ ସ୍ଥାନାନ୍ତରିତ କରାଯାଏ, ତେବେ IT ବିଭାଗର ନୂତନ ମୋଟ କର୍ମଚାରୀ ସଂଖ୍ୟା କେତେ ହେବ?",
+    o: ["656.16", "642.32", "654", "640"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjnjpRoUslSd9R5J6-SZiLId8fXtJJZqLVCHRjVWYrxAK7JltdCleJUwlxOvRvIDRyyTGNqLQ4CuK1E3WVZLZm6cPldKSeguVk0J6Hsq0LSW-wFowuOPnw7XC6p3UEsbwMxlkZ3Hx0wFTDB0qToYyTE1pokywHisZdt0eu49hksNZK9ad0N53DZTTo_S5i0/s1600/Screenshot%202026-03-20%2012.16.06%20PM.png",
+    exp: "<b>English:</b><br>Ops Total = 432. Ops Female = 35% of 432 = 151.2. Ops Male = 432 - 151.2 = 280.8.<br>Transferred = 20% of 280.8 = 56.16.<br>New IT Total = Old IT (600) + 56.16 = 656.16.<br><br><b>Odia:</b><br>ଅପରେସନ୍ ମୋଟ = ୪୩୨ | ଅପରେସନ୍ ମହିଳା = ୪୩୨ ର ୩୫% = ୧୫୧.୨ | ଅପରେସନ୍ ପୁରୁଷ = ୪୩୨ - ୧୫୧.୨ = ୨୮୦.୮ |<br>ସ୍ଥାନାନ୍ତରିତ = ୨୮୦.୮ ର ୨୦% = ୫୬.୧୬ |<br>ନୂତନ IT ମୋଟ = ପୁରୁଣା IT (୬୦୦) + ୫୬.୧୬ = ୬୫୬.୧୬ |"
+  },
+
+    
+  {
+    q: "If the number of unsold items for Store B is 600, what is the ratio of Sold to Unsold items for Store B?<br>ଯଦି ଷ୍ଟୋର୍ B ପାଇଁ ବିକ୍ରି ହୋଇନଥିବା ସାମଗ୍ରୀ ସଂଖ୍ୟା ୬୦୦ ହୁଏ, ତେବେ ଷ୍ଟୋର୍ B ପାଇଁ ବିକ୍ରି ହୋଇଥିବା ଏବଂ ବିକ୍ରି ହୋଇନଥିବା ସାମଗ୍ରୀର ଅନୁପାତ କେତେ?",
+    o: ["5 : 2 / ୫ : ୨", "3 : 2 / ୩ : ୨", "4 : 3 / ୪ : ୩", "2 : 1 / ୨ : ୧"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhNCTDY1bL4bRDUUxUfemiglinuNqUCQPBA07owPweMrJQhNipNzXjXw2j30BClpzMXOAhnkGW8ewNkDSXAQK6tPBRTao3e_g0JVmzbvymEOIGTB3ldBlZwAhwgC_24ztINIMrUB4AVo-D6AdPqoj18x2RtbR9vZrLvTuGzSaHSXYaDsshAFeFZvkjPiEpM/s1600/Screenshot%202026-03-20%2012.39.20%20PM.png",
+    exp: "<b>English:</b><br>Total items for B = 1500.<br>Unsold items = 600.<br>Sold items = 1500 - 600 = 900.<br>Ratio (Sold : Unsold) = 900 : 600 = 3 : 2.<br><br><b>Odia:</b><br>ଷ୍ଟୋର୍ B ର ମୋଟ ସାମଗ୍ରୀ = ୧୫୦୦ |<br>ବିକ୍ରି ହୋଇନଥିବା ସାମଗ୍ରୀ = ୬୦୦ |<br>ବିକ୍ରି ହୋଇଥିବା ସାମଗ୍ରୀ = ୧୫୦୦ - ୬୦୦ = ୯୦୦ |<br>ଅନୁପାତ (ବିକ୍ରି : ଅବିକ୍ରି) = ୯୦୦ : ୬୦୦ = ୩ : ୨ |"
+  },
+  {
+    q: "If the total produced items for Store C is 25% more than the total items produced for Store A, find the number of Sold items for Store C.<br>ଯଦି ଷ୍ଟୋର୍ C ର ମୋଟ ଉତ୍ପାଦିତ ସାମଗ୍ରୀ ଷ୍ଟୋର୍ A ର ମୋଟ ଉତ୍ପାଦିତ ସାମଗ୍ରୀ ତୁଳନାରେ ୨୫% ଅଧିକ ହୁଏ, ତେବେ ଷ୍ଟୋର୍ C ର ବିକ୍ରି ହୋଇଥିବା ସାମଗ୍ରୀ ସଂଖ୍ୟା ନିର୍ଣ୍ଣୟ କରନ୍ତୁ |",
+    o: ["937.5 / ୯୩୭.୫", "850 / ୮୫୦", "1050 / ୧୦୫୦", "900 / ୯୦୦"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhNCTDY1bL4bRDUUxUfemiglinuNqUCQPBA07owPweMrJQhNipNzXjXw2j30BClpzMXOAhnkGW8ewNkDSXAQK6tPBRTao3e_g0JVmzbvymEOIGTB3ldBlZwAhwgC_24ztINIMrUB4AVo-D6AdPqoj18x2RtbR9vZrLvTuGzSaHSXYaDsshAFeFZvkjPiEpM/s1600/Screenshot%202026-03-20%2012.39.20%20PM.png",
+    exp: "<b>English:</b><br>Total items Store A = 1200.<br>Total items Store C = 1200 + 25% of 1200 = 1200 + 300 = 1500.<br>Ratio Sold:Unsold for C = 5 : 3 (Total parts = 8).<br>Sold items = (1500 / 8) * 5 = 187.5 * 5 = 937.5.<br><br><b>Odia:</b><br>ଷ୍ଟୋର୍ A ର ମୋଟ ସାମଗ୍ରୀ = ୧୨୦୦ |<br>ଷ୍ଟୋର୍ C ର ମୋଟ ସାମଗ୍ରୀ = ୧୨୦୦ ର ୧୨୫% = ୧୫୦୦ |<br>ଷ୍ଟୋର୍ C ର ବିକ୍ରି ଏବଂ ଅବିକ୍ରି ଅନୁପାତ = ୫ : ୩ (ମୋଟ ଭାଗ = ୮) |<br>ବିକ୍ରି ହୋଇଥିବା ସାମଗ୍ରୀ = (୧୫୦୦ / ୮) * ୫ = ୯୩୭.୫ |"
+  },
+  {
+    q: "For Store D, if the number of defective items is 160, what is the ratio between the number of Defective items and the number of Unsold items?<br>ଷ୍ଟୋର୍ D ପାଇଁ, ଯଦି ତ୍ରୁଟିପୂର୍ଣ୍ଣ ସାମଗ୍ରୀ ସଂଖ୍ୟା ୧୬୦ ହୁଏ, ତେବେ ତ୍ରୁଟିପୂର୍ଣ୍ଣ ସାମଗ୍ରୀ ଏବଂ ବିକ୍ରି ହୋଇନଥିବା ସାମଗ୍ରୀ ମଧ୍ୟରେ ଅନୁପାତ କେତେ?",
+    o: ["3 : 8 / ୩ : ୮", "4 : 15 / ୪ : ୧୫", "2 : 9 / ୨ : ୯", "5 : 12 / ୫ : ୧୨"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhNCTDY1bL4bRDUUxUfemiglinuNqUCQPBA07owPweMrJQhNipNzXjXw2j30BClpzMXOAhnkGW8ewNkDSXAQK6tPBRTao3e_g0JVmzbvymEOIGTB3ldBlZwAhwgC_24ztINIMrUB4AVo-D6AdPqoj18x2RtbR9vZrLvTuGzSaHSXYaDsshAFeFZvkjPiEpM/s1600/Screenshot%202026-03-20%2012.39.20%20PM.png",
+    exp: "<b>English:</b><br>Total Store D = 2000.<br>Sold : Unsold = 7 : 3.<br>Unsold items = (2000 / 10) * 3 = 600.<br>Defective items = 160.<br>Ratio = 160 : 600 = 4 : 15.<br><br><b>Odia:</b><br>ଷ୍ଟୋର୍ D ର ମୋଟ ସାମଗ୍ରୀ = ୨୦୦୦ |<br>ବିକ୍ରି : ଅବିକ୍ରି = ୭ : ୩ |<br>ବିକ୍ରି ହୋଇନଥିବା ସାମଗ୍ରୀ = (୨୦୦୦ / ୧୦) * ୩ = ୬୦୦ |<br>ତ୍ରୁଟିପୂର୍ଣ୍ଣ ସାମଗ୍ରୀ = ୧୬୦ |<br>ଅନୁପାତ = ୧୬୦ : ୬୦୦ = ୪ : ୧୫ |"
+  },
+  {
+    q: "What is the average number of Defective items for Stores A, B, and E together?<br>ଷ୍ଟୋର୍ A, B ଏବଂ E ର ଏକତ୍ର ହାରାହାରି ତ୍ରୁଟିପୂର୍ଣ୍ଣ ସାମଗ୍ରୀ ସଂଖ୍ୟା କେତେ?",
+    o: ["240 / ୨୪୦", "220 / ୨୨୦", "200 / ୨୦୦", "180 / ୧୮୦"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhNCTDY1bL4bRDUUxUfemiglinuNqUCQPBA07owPweMrJQhNipNzXjXw2j30BClpzMXOAhnkGW8ewNkDSXAQK6tPBRTao3e_g0JVmzbvymEOIGTB3ldBlZwAhwgC_24ztINIMrUB4AVo-D6AdPqoj18x2RtbR9vZrLvTuGzSaHSXYaDsshAFeFZvkjPiEpM/s1600/Screenshot%202026-03-20%2012.39.20%20PM.png",
+    exp: "<b>English:</b><br>Defective A = 10% of 1200 = 120.<br>Defective B = 12% of 1500 = 180.<br>Defective E = 20% of 1800 = 360.<br>Total = 120 + 180 + 360 = 660.<br>Average = 660 / 3 = 220.<br><br><b>Odia:</b><br>ଷ୍ଟୋର୍ A ର ତ୍ରୁଟିପୂର୍ଣ୍ଣ = ୧୨୦୦ ର ୧୦% = ୧୨୦ |<br>ଷ୍ଟୋର୍ B ର ତ୍ରୁଟିପୂର୍ଣ୍ଣ = ୧୫୦୦ ର ୧୨% = ୧୮୦ |<br>ଷ୍ଟୋର୍ E ର ତ୍ରୁଟିପୂର୍ଣ୍ଣ = ୧୮୦୦ ର ୨୦% = ୩୬୦ |<br>ମୋଟ = ୬୬୦ | ହାରାହାରି = ୬୬୦ / ୩ = ୨୨୦ |"
+  },
+  {
+    q: "If for Store E, the difference between Sold items and Unsold items is 360, find the total number of Sold items for Store E (Assume Sold > Unsold).<br>ଯଦି ଷ୍ଟୋର୍ E ପାଇଁ, ବିକ୍ରି ହୋଇଥିବା ଏବଂ ବିକ୍ରି ହୋଇନଥିବା ସାମଗ୍ରୀ ମଧ୍ୟରେ ପାର୍ଥକ୍ୟ ୩୬୦ ହୁଏ, ତେବେ ଷ୍ଟୋର୍ E ର ବିକ୍ରି ହୋଇଥିବା ସାମଗ୍ରୀର ସଂଖ୍ୟା କେତେ?",
+    o: ["1020 / ୧୦୨୦", "980 / ୯୮୦", "1080 / ୧୦୮୦", "1140 / ୧୧୪୦"],
+    a: 2,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhNCTDY1bL4bRDUUxUfemiglinuNqUCQPBA07owPweMrJQhNipNzXjXw2j30BClpzMXOAhnkGW8ewNkDSXAQK6tPBRTao3e_g0JVmzbvymEOIGTB3ldBlZwAhwgC_24ztINIMrUB4AVo-D6AdPqoj18x2RtbR9vZrLvTuGzSaHSXYaDsshAFeFZvkjPiEpM/s1600/Screenshot%202026-03-20%2012.39.20%20PM.png",
+    exp: "<b>English:</b><br>Total Store E = 1800.<br>Let Sold = S, Unsold = U.<br>S + U = 1800 and S - U = 360.<br>Adding both: 2S = 2160 => S = 1080.<br><br><b>Odia:</b><br>ଷ୍ଟୋର୍ E ର ମୋଟ ସାମଗ୍ରୀ = ୧୮୦୦ |<br>ଧରନ୍ତୁ ବିକ୍ରି = S, ଅବିକ୍ରି = U |<br>S + U = ୧୮୦୦ ଏବଂ S - U = ୩୬୦ |<br>ଉଭୟକୁ ମିଶାଇଲେ: ୨S = ୨୧୬୦ => S = ୧୦୮୦ |"
+  },
+
+    
+  {
+    q: "What is the total number of Digital watches manufactured by all three companies together?<br>ତିନୋଟିଯାକ କମ୍ପାନୀ ଦ୍ୱାରା ପ୍ରସ୍ତୁତ ମୋଟ ଡିଜିଟାଲ୍ ଘଣ୍ଟା ସଂଖ୍ୟା କେତେ?",
+    o: ["1320 / ୧୩୨୦", "1420 / ୧୪୨୦", "1500 / ୧୫୦୦", "1280 / ୧୨୮୦"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjSJFZQnXUcJdl9HvMAWdIslR8RtuL_4zEoBlQqqUNBsJjEdc4S9NfCusFzbeAAzgpP6GPrxd0BwT6k3_WUqiMw68yBvQs-beSLUOqMU4_aLC-2pygliVa6p2dlNtrvhkVi8JORXN4fuswfVD3At_nVMqrtqJBLprhXT4rf4d9XmxGYfRSgbKyxn_wr7fHb/s1600/caslet.jpg",
+    exp: "English:<br>1. Co A: 20% of 2500 = 500. Digital = 2/5 of 500 = 200.<br>2. Co B: Total = 800. Digital - Analog = 200, Digital + Analog = 800. Solving this, Digital = 500.<br>3. Co C: Total = 2500 - (500 + 800) = 1200. Analog = 40% of 1200 = 480, so Digital = 1200 - 480 = 720.<br>Total Digital = 200 + 500 + 720 = 1420.<br><br>Odia:<br>୧. କମ୍ପାନୀ A: ୨୫୦୦ ର ୨୦% = ୫୦୦ | ଡିଜିଟାଲ୍ = ୫୦୦ ର ୨/୫ = ୨୦୦ |<br>୨. କମ୍ପାନୀ B: ମୋଟ = ୮୦୦ | ଡିଜିଟାଲ୍ - ଆନାଲଗ୍ = ୨୦୦, ଡିଜିଟାଲ୍ + ଆନାଲଗ୍ = ୮୦୦ | ଏହାକୁ ସମାଧାନ କଲେ, ଡିଜିଟାଲ୍ = ୫୦୦ |<br>୩. କମ୍ପାନୀ C: ମୋଟ = ୨୫୦୦ - (୫୦୦ + ୮୦୦) = ୧୨୦୦ | ଆନାଲଗ୍ = ୧୨୦୦ ର ୪୦% = ୪୮୦, ତେଣୁ ଡିଜିଟାଲ୍ = ୧୨୦୦ - ୪୮୦ = ୭୨୦ |<br>ମୋଟ ଡିଜିଟାଲ୍ = ୨୦୦ + ୫୦୦ + ୭୨୦ = ୧୪୨୦ |"
+  },
+  {
+    q: "The number of Analog watches manufactured by Company C is what percent more than the Analog watches manufactured by Company A?<br>କମ୍ପାନୀ C ଦ୍ୱାରା ପ୍ରସ୍ତୁତ ଆନାଲଗ୍ ଘଣ୍ଟା ସଂଖ୍ୟା, କମ୍ପାନୀ A ଦ୍ୱାରା ପ୍ରସ୍ତୁତ ଆନାଲଗ୍ ଘଣ୍ଟା ସଂଖ୍ୟା ଠାରୁ କେତେ ପ୍ରତିଶତ ଅଧିକ?",
+    o: ["40% / ୪୦%", "50% / ୫୦%", "60% / ୬୦%", "75% / ୭୫%"],
+    a: 2,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjSJFZQnXUcJdl9HvMAWdIslR8RtuL_4zEoBlQqqUNBsJjEdc4S9NfCusFzbeAAzgpP6GPrxd0BwT6k3_WUqiMw68yBvQs-beSLUOqMU4_aLC-2pygliVa6p2dlNtrvhkVi8JORXN4fuswfVD3At_nVMqrtqJBLprhXT4rf4d9XmxGYfRSgbKyxn_wr7fHb/s1600/caslet.jpg",
+    exp: "English:<br>Analog A = 3/5 of 500 = 300.<br>Analog C = 40% of 1200 = 480.<br>Difference = 480 - 300 = 180.<br>Percentage More = (180 / 300) * 100 = 60%.<br><br>Odia:<br>ଆନାଲଗ୍ A = ୫୦୦ ର ୩/୫ = ୩୦୦ |<br>ଆନାଲଗ୍ C = ୧୨୦୦ ର ୪୦% = ୪୮୦ |<br>ପାର୍ଥକ୍ୟ = ୪୮୦ - ୩୦୦ = ୧୮୦ |<br>ପ୍ରତିଶତ ଅଧିକ = (୧୮୦ / ୩୦୦) * ୧୦୦ = ୬୦% |"
+  },
+  {
+    q: "What is the ratio of the total watches manufactured by Company B to the number of Digital watches manufactured by Company C?<br>କମ୍ପାନୀ B ଦ୍ୱାରା ପ୍ରସ୍ତୁତ ମୋଟ ଘଣ୍ଟା ଏବଂ କମ୍ପାନୀ C ଦ୍ୱାରା ପ୍ରସ୍ତୁତ ଡିଜିଟାଲ୍ ଘଣ୍ଟା ସଂଖ୍ୟାର ଅନୁପାତ କେତେ?",
+    o: ["10:9 / ୧୦:୯", "9:10 / ୯:୧୦", "5:4 / ୫:୪", "4:5 / ୪:୫"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjSJFZQnXUcJdl9HvMAWdIslR8RtuL_4zEoBlQqqUNBsJjEdc4S9NfCusFzbeAAzgpP6GPrxd0BwT6k3_WUqiMw68yBvQs-beSLUOqMU4_aLC-2pygliVa6p2dlNtrvhkVi8JORXN4fuswfVD3At_nVMqrtqJBLprhXT4rf4d9XmxGYfRSgbKyxn_wr7fHb/s1600/caslet.jpg",
+    exp: "English:<br>Total Watches Company B = 800.<br>Digital Watches Company C = 720.<br>Ratio = 800 : 720 = 80 : 72 = 10 : 9.<br><br>Odia:<br>କମ୍ପାନୀ B ର ମୋଟ ଘଣ୍ଟା = ୮୦୦ |<br>କମ୍ପାନୀ C ର ଡିଜିଟାଲ୍ ଘଣ୍ଟା = ୭୨୦ |<br>ଅନୁପାତ = ୮୦୦ : ୭୨୦ = ୮୦ : ୭୨ = ୧୦ : ୯ |"
+  },
+  {
+    q: "Find the average number of Analog watches manufactured by all three companies together.<br>ତିନୋଟିଯାକ କମ୍ପାନୀ ଦ୍ୱାରା ପ୍ରସ୍ତୁତ ଆନାଲଗ୍ ଘଣ୍ଟାର ହାରାହାରି ସଂଖ୍ୟା ନିର୍ଣ୍ଣୟ କରନ୍ତୁ |",
+    o: ["320 / ୩୨୦", "340 / ୩୪୦", "360 / ୩୬୦", "380 / ୩୮୦"],
+    a: 2,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjSJFZQnXUcJdl9HvMAWdIslR8RtuL_4zEoBlQqqUNBsJjEdc4S9NfCusFzbeAAzgpP6GPrxd0BwT6k3_WUqiMw68yBvQs-beSLUOqMU4_aLC-2pygliVa6p2dlNtrvhkVi8JORXN4fuswfVD3At_nVMqrtqJBLprhXT4rf4d9XmxGYfRSgbKyxn_wr7fHb/s1600/caslet.jpg",
+    exp: "English:<br>Analog A = 300.<br>Analog B = (800 - 200) / 2 = 300.<br>Analog C = 480.<br>Total Analog = 300 + 300 + 480 = 1080.<br>Average = 1080 / 3 = 360.<br><br>Odia:<br>ଆନାଲଗ୍ A = ୩୦୦ |<br>ଆନାଲଗ୍ B = ୩୦୦ |<br>ଆନାଲଗ୍ C = ୪୮୦ |<br>ମୋଟ ଆନାଲଗ୍ = ୩୦୦ + ୩୦୦ + ୪୮୦ = ୧୦୮୦ |<br>ହାରାହାରି = ୧୦୮୦ / ୩ = ୩୬୦ |"
+  },
+  {
+    q: "If the cost price of each Digital watch from Company A is ₹1200, find the total revenue generated by selling all Digital watches of Company A at a 10% profit.<br>ଯଦି କମ୍ପାନୀ A ର ପ୍ରତ୍ୟେକ ଡିଜିଟାଲ୍ ଘଣ୍ଟାର କ୍ରୟ ମୂଲ୍ୟ ₹୧୨୦୦ ହୁଏ, ତେବେ ୧୦% ଲାଭରେ କମ୍ପାନୀ A ର ସମସ୍ତ ଡିଜିଟାଲ୍ ଘଣ୍ଟା ବିକ୍ରି କରି ମୋଟ କେତେ ରାଜସ୍ୱ ମିଳିବ?",
+    o: ["₹2,40,000 / ₹୨,୪୦,୦୦୦", "₹2,64,000 / ₹୨,୬୪,୦୦୦", "₹2,50,000 / ₹୨,୫୦,୦୦୦", "₹2,84,000 / ₹୨,୮୪,୦୦୦"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjSJFZQnXUcJdl9HvMAWdIslR8RtuL_4zEoBlQqqUNBsJjEdc4S9NfCusFzbeAAzgpP6GPrxd0BwT6k3_WUqiMw68yBvQs-beSLUOqMU4_aLC-2pygliVa6p2dlNtrvhkVi8JORXN4fuswfVD3At_nVMqrtqJBLprhXT4rf4d9XmxGYfRSgbKyxn_wr7fHb/s1600/caslet.jpg",
+    exp: "English:<br>Number of Digital watches in A = 200.<br>Cost Price (CP) per watch = ₹1200.<br>Profit = 10%, so Selling Price (SP) = 1200 + 120 = ₹1320.<br>Total Revenue = 200 * 1320 = ₹2,64,000.<br><br>Odia:<br>କମ୍ପାନୀ A ରେ ଡିଜିଟାଲ୍ ଘଣ୍ଟା ସଂଖ୍ୟା = ୨୦୦ |<br>ଘଣ୍ଟା ପ୍ରତି କ୍ରୟ ମୂଲ୍ୟ = ₹୧୨୦୦ |<br>ଲାଭ = ୧୦%, ତେଣୁ ବିକ୍ରୟ ମୂଲ୍ୟ = ୧୨୦୦ + ୧୨୦ = ₹୧୩୨୦ |<br>ମୋଟ ରାଜସ୍ୱ = ୨୦୦ * ୧୩୨୦ = ₹୨,୬୪,୦୦୦ |"
+  }
+
+
+
+
+
+
+
+
+    
+
+
+
+
+    
+];
+/* ===== End questions with explanations ===== */
+
+let answers={}, index=0, timeLeft, timerInt;
+
+window.onload = () => {
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+  if(saved){
+    if(saved.answers) answers = saved.answers; // restore previous answers
+    showScore(saved);
+  } else {
+    loader.classList.add("hidden");
+    instruction.classList.remove("hidden");
+  }
+};
+
+function startTest(){
+  instruction.classList.add("hidden");
+  test.classList.remove("hidden");
+  timeLeft=TEST_DURATION_MINUTES*60;
+  timerInt=setInterval(runTimer,1000);
+  buildGrid();loadQ();
+}
+
+function runTimer(){
+  if(timeLeft<=0){submitTest();return;}
+  timeLeft--;
+  timer.innerText=`${String(Math.floor(timeLeft/60)).padStart(2,"0")}:${String(timeLeft%60).padStart(2,"0")}`;
+}
+
+function loadQ(){
+  const q = questions[index];
+  question.innerHTML = (index + 1) + ". " + q.q;
+
+  /* ===== IMAGE LOGIC ===== */
+  imgWrap.classList.add("hidden");
+  qImg.style.display = "none";
+  imgLoader.style.display = "block";
+
+  if(q.img){
+    imgWrap.classList.remove("hidden");
+    qImg.src = q.img;
+
+    qImg.onload = () => {
+      imgLoader.style.display = "none";
+      qImg.style.display = "block";
+    };
+
+    qImg.onerror = () => {
+      imgWrap.classList.add("hidden");
+    };
+  }
+
+  options.innerHTML="";
+  q.o.forEach((t,i)=>{
+    const d=document.createElement("div");
+    d.className="option"+(answers[index]===i?" selected":"");
+    d.innerText=t;
+    d.onclick=()=>{
+      answers[index]=answers[index]===i?null:i;
+
+      /* ===== Save answers to localStorage ===== */
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+      saved.answers = answers;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+      /* ===== End save ===== */
+
+      loadQ();
+      updateGrid();
+    };
+    options.appendChild(d);
+  });
+
+  prevBtn.disabled = index === 0;
+  nextBtn.disabled = index === questions.length - 1;
+}
+
+function nextQ(){index++;loadQ();}
+function prevQ(){index--;loadQ();}
+
+function buildGrid(){
+  grid.innerHTML="";
+  questions.forEach((_,i)=>{
+    const d=document.createElement("div");
+    d.innerText=i+1;
+    d.onclick=()=>{index=i;loadQ();};
+    grid.appendChild(d);
+  });
+}
+
+function updateGrid(){
+  [...grid.children].forEach((d,i)=>d.classList.toggle("attempted",answers[i]!=null));
+}
+
+function submitTest(){
+  clearInterval(timerInt);
+  test.classList.add("hidden");
+  loader.classList.remove("hidden");
+  loader.querySelector("p").innerText="Saving score & calculating rank…";
+
+  let correct=0,wrong=0;
+  questions.forEach((q,i)=>{
+    if(answers[i]==null)return;
+    answers[i]===q.a?correct++:wrong++;
+  });
+
+  const score=+(correct-wrong*NEGATIVE_MARK).toFixed(2);
+
+  const baseData={
+    phone:user.phone,
+    name:user.name,
+    score,correct,wrong,
+    unattempted:questions.length-correct-wrong,
+    updatedAt:Date.now()
+  };
+
+  db.collection("tests").doc(TEST_ID).collection("results").doc(user.phone)
+  .set(baseData,{merge:true})
+  .then(()=>calculateRank(baseData));
+}
+
+function calculateRank(myData){
+  db.collection("tests").doc(TEST_ID).collection("results").get()
+  .then(snap=>{
+    const arr=snap.docs.map(d=>({...d.data(),id:d.id}));
+    arr.sort((a,b)=>b.score-a.score);
+    const rank=arr.findIndex(x=>x.id===user.phone)+1;
+    myData.rankText=`${rank} / ${arr.length}`;
+    myData.answers=answers;
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(myData));
+    showScore(myData);
+  });
+}
+
+function showScore(r){
+  loader.classList.add("hidden");
+  score.classList.remove("hidden");
+  userScore.innerText=`Hi ${r.name}, your score is ${r.score}`;
+  stats.innerHTML=`Correct: ${r.correct}<br>Wrong: ${r.wrong}<br>Unattempted: ${r.unattempted}<br><b>Rank: ${r.rankText}</b>`;
+  filterQ("all",document.querySelector(".filter button"));
+}
+
+function filterQ(type,btn){
+  document.querySelectorAll(".filter button").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  review.innerHTML="";
+  questions.forEach((q,i)=>{
+    const a=answers[i];
+    if(type==="correct"&&a!==q.a)return;
+    if(type==="wrong"&&(a==null||a===q.a))return;
+    if(type==="unattempted"&&a!=null)return;
+    const c=document.createElement("div");
+    c.className="card";
+    c.innerHTML=`
+      <b>${q.q}</b><br>
+      Your: ${a!=null?q.o[a]:"—"}<br>
+      Correct: ${q.o[q.a]}<br>
+      <details>
+        <summary>Show Explanation</summary>
+        <p>${q.exp || "No explanation provided."}</p>
+      </details>
+    `;
+    review.appendChild(c);
+  });
+}
+
+function reattempt(){popup.style.display="flex";}
+function confirmReattempt(){localStorage.removeItem(STORAGE_KEY);location.reload();}
+</script>
+</body>
+</html>
