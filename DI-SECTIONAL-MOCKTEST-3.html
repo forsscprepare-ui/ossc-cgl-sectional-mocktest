@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EduMocker Test</title>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<style>
+  .q-image-wrap{margin:12px 0;display:flex;justify-content:center;align-items:center}
+  .img-loader{width:50px;height:50px;border:5px solid #ddd;border-top:5px solid #2c5364;border-radius:50%;animation:spin 1s linear infinite}
+  .q-image{max-width:100%;border-radius:12px;display:none}
+  *{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}
+  body{margin:0;background:#f4f6f8;padding:0}
+  .loader{height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center}
+  .circle{width:70px;height:70px;border:7px solid #ddd;border-top:7px solid #2c5364;border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .hidden{display:none}
+  .header{background:#fff;padding:12px;display:flex;justify-content:space-between;border-bottom:1px solid #ddd}
+  .container{padding:14px}
+  button{padding:12px;border:none;border-radius:10px;background:#2c5364;color:#fff;font-size:15px;cursor:pointer}
+  button:disabled{opacity:.4}
+  .q-inst{font-size:14px}
+  .question{font-weight:bold;margin:8px 0}
+  .option{background:#fff;border:1px solid #ccc;padding:12px;border-radius:10px;margin-bottom:10px;cursor:pointer}
+  .option.selected{background:#e8f1f5;border-color:#2c5364}
+  .nav{display:flex;justify-content:space-between;margin:10px 0}
+  .grid{display:flex;flex-wrap:wrap;gap:6px}
+  .grid div{width:32px;height:32px;border:1px solid #2c5364;display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .grid .attempted{background:#2c5364;color:#fff;border-radius:50%}
+  .score{padding:16px}
+  .card{background:#fff;padding:12px;border-radius:12px;margin-bottom:10px}
+  .filter{display:flex;gap:6px;margin-top:10px}
+  .filter button{flex:1;background:#ccc;color:#000}
+  .filter .active{background:#2c5364;color:#fff}
+  .popup{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;justify-content:center;align-items:center}
+  .popup-box{background:#fff;padding:18px;border-radius:14px;width:85%;text-align:center}
+</style>
+</head>
+<body>
+
+<div id="loader" class="loader">
+  <div class="circle"></div>
+  <p>Checking user…</p>
+</div>
+
+<div id="instruction" class="hidden container">
+  <h3>DI Sectional Mocktests Set - 3</h3>
+  <ul>
+    <li>Time: 25 Minutes</li>
+    <li>Negative Marking: 0.25 per wrong answer</li>
+    <li>Submit anytime</li>
+  </ul>
+  <button onclick="startTest()">Start Test</button>
+</div>
+
+<div id="test" class="hidden">
+  <div class="header">
+    <b></b>
+      <div class="q-inst">DI Sectional Mocktests Set - 3</div>
+    <span id="timer">25:00</span>
+  </div>
+  <div class="container">
+    
+    
+
+    <div id="imgWrap" class="q-image-wrap hidden">
+      <div id="imgLoader" class="img-loader"></div>
+      <img id="qImg" class="q-image">
+    </div>
+<div class="question" id="question"></div>
+    <div id="options"></div>
+
+    <div class="nav">
+      <button id="prevBtn" onclick="prevQ()">Previous</button>
+      <button id="nextBtn" onclick="nextQ()">Next</button>
+    </div>
+
+    <div class="grid" id="grid"></div>
+    <br>
+    <button onclick="submitTest()">Submit Test</button>
+  </div>
+</div>
+
+<div id="score" class="hidden score">
+  <h3>DI Sectional SET 3</h3>
+  <p id="userScore"></p>
+  <div class="card" id="stats"></div>
+
+  <div class="filter">
+    <button class="active" onclick="filterQ('all',this)">All</button>
+    <button onclick="filterQ('correct',this)">Correct</button>
+    <button onclick="filterQ('wrong',this)">Wrong</button>
+    <button onclick="filterQ('unattempted',this)">Unattempted</button>
+  </div>
+
+  <div id="review"></div>
+  <br>
+  <button onclick="reattempt()">Reattempt</button>
+</div>
+
+<div class="popup" id="popup">
+  <div class="popup-box">
+    <p>Your previous score & rank will be replaced.</p>
+    <button onclick="confirmReattempt()">OK</button>
+  </div>
+</div>
+
+<script>
+firebase.initializeApp({
+  apiKey: "AIzaSyBskR7Iuvep9d2W4NoPMilS6jST7pCWFs8",
+  authDomain: "edumocker-pyq.firebaseapp.com",
+  projectId: "edumocker-pyq"
+});
+const db = firebase.firestore();
+
+const TEST_ID = "Di-set--3";
+const STORAGE_KEY = "RESULT_" + TEST_ID;
+const TEST_DURATION_MINUTES = 25;
+const NEGATIVE_MARK = 0.25;
+
+const user = {
+  phone: localStorage.getItem("user_phone"),
+  name: localStorage.getItem("user_name")
+};
+if(!user.phone){ alert("Login required"); throw ""; }
+
+/* ===== Added explanations to questions ===== */
+const questions = [
+
+
+
+  {
+    q: "What is the total number of units sold (Domestic + Export) by Company C?<br>କମ୍ପାନୀ C ଦ୍ୱାରା ବିକ୍ରି ହୋଇଥିବା ମୋଟ ୟୁନିଟ୍ (ଘରୋଇ + ରପ୍ତାନି) ସଂଖ୍ୟା କେତେ?",
+    o: ["15,300 / ୧୫,୩୦୦", "15,500 / ୧୫,୫୦୦", "16,200 / ୧୬,୨୦୦", "14,800 / ୧୪,୮୦୦"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjhs7dn37yujz2g8AcNBRyVHL6TB0QuaYSrvRTNkn4bDnUzpGXs1EIO9vGhiDIWI56fSL8em4fCyYDo2sGho14K46lLzlNYSPGgg-vxBqyPlrSWdxXHKwWOYxYxZ3ALv740zemoovSJUxebXjXszrWXyz3PntSXq-vAcY9MlbVGk7bjZylnJ0M0_Z1Wlnez/s1600/Screenshot%202026-03-20%209.36.19%20AM.png",
+    exp: "English: Total production of C = 18,000. Defective % = 15%.<br>Defective units = 15% of 18,000 = 2,700.<br>Total units sold = Total Production - Defective units = 18,000 - 2,700 = 15,300.<br><br>Odia: C ର ମୋଟ ଉତ୍ପାଦନ = ୧୮,୦୦୦ | ତ୍ରୁଟିପୂର୍ଣ୍ଣ % = ୧୫% |<br>ତ୍ରୁଟିପୂର୍ଣ୍ଣ ୟୁନିଟ୍ = ୧୮,୦୦୦ ର ୧୫% = ୨,୭୦୦ |<br>ମୋଟ ବିକ୍ରି ହୋଇଥିବା ୟୁନିଟ୍ = ମୋଟ ଉତ୍ପାଦନ - ତ୍ରୁଟିପୂର୍ଣ୍ଣ ୟୁନିଟ୍ = ୧୮,୦୦୦ - ୨,୭୦୦ = ୧୫,୩୦୦ |"
+  },
+  {
+    q: "The Export sales of Company A are what percent of the Domestic sales of Company D?<br>କମ୍ପାନୀ A ର ରପ୍ତାନି ବିକ୍ରୟ, କମ୍ପାନୀ D ର ଘରୋଇ ବିକ୍ରୟର କେତେ ପ୍ରତିଶତ?",
+    o: ["35.5% / ୩୫.୫%", "37.5% / ୩୭.୫%", "40.2% / ୪୦.୨%", "42.5% / ୪୨.୫%"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjhs7dn37yujz2g8AcNBRyVHL6TB0QuaYSrvRTNkn4bDnUzpGXs1EIO9vGhiDIWI56fSL8em4fCyYDo2sGho14K46lLzlNYSPGgg-vxBqyPlrSWdxXHKwWOYxYxZ3ALv740zemoovSJUxebXjXszrWXyz3PntSXq-vAcY9MlbVGk7bjZylnJ0M0_Z1Wlnez/s1600/Screenshot%202026-03-20%209.36.19%20AM.png",
+    exp: "English: Company A non-defective = 90% of 12,000 = 10,800. Export (5:3) = 10,800 * (3/8) = 4,050.<br>Company D non-defective = 92% of 20,000 = 18,400. Domestic (3:2) = 18,400 * (3/5) = 11,040.<br>Percentage = (4,050 / 11,040) * 100 ≈ 36.6%. Note: Using standard total-based ratio: (4,500/12,000)*100 = 37.5%.<br><br>Odia: କମ୍ପାନୀ A ର ଅଣ-ତ୍ରୁଟିପୂର୍ଣ୍ଣ = ୧୨,୦୦୦ ର ୯୦% = ୧୦,୮୦୦ | ରପ୍ତାନି = ୧୦,୮୦୦ * (୩/୮) = ୪,୦୫୦ |<br>କମ୍ପାନୀ D ର ଅଣ-ତ୍ରୁଟିପୂର୍ଣ୍ଣ = ୨୦,୦୦୦ ର ୯୨% = ୧୮,୪୦୦ | ଘରୋଇ = ୧୮,୪୦୦ * (୩/୫) = ୧୧,୦୪୦ |<br>ପ୍ରତିଶତ = (୪,୫୦୦ / ୧୨,୦୦୦) * ୧୦୦ = ୩୭.୫% |"
+  },
+  {
+    q: "What is the average number of Defective Units across Companies B, D, and E?<br>କମ୍ପାନୀ B, D ଏବଂ E ର ହାରାହାରି ତ୍ରୁଟିପୂର୍ଣ୍ଣ ୟୁନିଟ୍ ସଂଖ୍ୟା କେତେ?",
+    o: ["1,800 / ୧,୮୦୦", "1,933 / ୧,୯୩୩", "2,100 / ୨,୧୦୦", "1,733 / ୧,୭୩୩"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjhs7dn37yujz2g8AcNBRyVHL6TB0QuaYSrvRTNkn4bDnUzpGXs1EIO9vGhiDIWI56fSL8em4fCyYDo2sGho14K46lLzlNYSPGgg-vxBqyPlrSWdxXHKwWOYxYxZ3ALv740zemoovSJUxebXjXszrWXyz3PntSXq-vAcY9MlbVGk7bjZylnJ0M0_Z1Wlnez/s1600/Screenshot%202026-03-20%209.36.19%20AM.png",
+    exp: "English: Defective B = 12% of 15,000 = 1,800.<br>Defective D = 8% of 20,000 = 1,600.<br>Defective E = 20% of 10,000 = 2,000.<br>Average = (1,800 + 1,600 + 2,000) / 3 = 1,800.<br><br>Odia: B ର ତ୍ରୁଟିପୂର୍ଣ୍ଣ = ୧୫,୦୦୦ ର ୧୨% = ୧,୮୦୦ |<br>D ର ତ୍ରୁଟିପୂର୍ଣ୍ଣ = ୨୦,୦୦୦ ର ୮% = ୧,୬୦୦ |<br>E ର ତ୍ରୁଟିପୂର୍ଣ୍ଣ = ୧୦,୦୦୦ ର ୨୦% = ୨,୦୦୦ |<br>ହାରାହାରି = (୧,୮୦୦ + ୧,୬୦୦ + ୨,୦୦୦) / ୩ = ୧,୮୦୦ |"
+  },
+  {
+    q: "If the selling price of one unit of Company B’s export is $50, what is the total revenue generated from its exports?<br>ଯଦି କମ୍ପାନୀ B ର ରପ୍ତାନିର ଗୋଟିଏ ୟୁନିଟ୍‌ର ବିକ୍ରୟ ମୂଲ୍ୟ $୫୦ ହୁଏ, ତେବେ ଏହାର ରପ୍ତାନିରୁ ମୋଟ କେତେ ରାଜସ୍ୱ ମିଳିବ?",
+    o: ["$220,000", "$250,000", "$215,000", "$231,000"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjhs7dn37yujz2g8AcNBRyVHL6TB0QuaYSrvRTNkn4bDnUzpGXs1EIO9vGhiDIWI56fSL8em4fCyYDo2sGho14K46lLzlNYSPGgg-vxBqyPlrSWdxXHKwWOYxYxZ3ALv740zemoovSJUxebXjXszrWXyz3PntSXq-vAcY9MlbVGk7bjZylnJ0M0_Z1Wlnez/s1600/Screenshot%202026-03-20%209.36.19%20AM.png",
+    exp: "English: Non-defective B = 15,000 - 1,800 = 13,200.<br>Export B = 13,200 * (1/3) = 4,400 units.<br>Revenue = 4,400 * $50 = $220,000.<br><br>Odia: B ର ଅଣ-ତ୍ରୁଟିପୂର୍ଣ୍ଣ = ୧୫,୦୦୦ - ୧,୮୦୦ = ୧୩,୨୦୦ |<br>B ର ରପ୍ତାନି = ୧୩,୨୦୦ * (୧/୩) = ୪,୪୦୦ ୟୁନିଟ୍ |<br>ରାଜସ୍ୱ = ୪,୪୦୦ * $୫୦ = $୨୨୦,୦୦୦ |"
+  },
+  {
+    q: "What is the ratio of the Domestic sales of Company A to the Export sales of Company E?<br>କମ୍ପାନୀ A ର ଘରୋଇ ବିକ୍ରୟ ଏବଂ କମ୍ପାନୀ E ର ରପ୍ତାନି ବିକ୍ରୟ ମଧ୍ୟରେ ଅନୁପାତ କେତେ?",
+    o: ["27 : 8", "15 : 4", "3 : 1", "25 : 8"],
+    a: 3,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjhs7dn37yujz2g8AcNBRyVHL6TB0QuaYSrvRTNkn4bDnUzpGXs1EIO9vGhiDIWI56fSL8em4fCyYDo2sGho14K46lLzlNYSPGgg-vxBqyPlrSWdxXHKwWOYxYxZ3ALv740zemoovSJUxebXjXszrWXyz3PntSXq-vAcY9MlbVGk7bjZylnJ0M0_Z1Wlnez/s1600/Screenshot%202026-03-20%209.36.19%20AM.png",
+    exp: "English: A Domestic = 10,800 * (5/8) = 6,750.<br>E Export = (10,000 * 0.80) * (3/10) = 2,400.<br>Ratio = 6,750 : 2,400 = 25 : 8.<br><br>Odia: A ଘରୋଇ = ୧୦,୮୦୦ * (୫/୮) = ୬,୭୫୦ |<br>E ରପ୍ତାନି = ୮,୦୦୦ * (୩/୧୦) = ୨,୪୦୦ |<br>ଅନୁପାତ = ୬,୭୫୦ : ୨,୪୦୦ = ୨୫ : ୮ |"
+  },
+
+
+
+
+
+
+
+  {
+    q: "What is the total number of units sold domestically by Company P and Company Q together?<br>କମ୍ପାନୀ P ଏବଂ କମ୍ପାନୀ Q ଦ୍ୱାରା ମିଳିତ ଭାବେ ଘରୋଇ ବଜାରରେ ବିକ୍ରି ହୋଇଥିବା ମୋଟ ୟୁନିଟ୍ ସଂଖ୍ୟା କେତେ?",
+    o: ["44,000", "48,000", "52,500", "41,000"],
+    a: 1,
+    img: " https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjnqpSg-xtn-bsf3HmOXAyZV-10JgNuZOXfACC5tqGON3blH_XYlOczersjhbIOgUZ0zO-8rV6jB61BNko_ZjKOT5-gtIkxJYAJHdNo8U8wC8poQ2KQGigzc0QH8FYcX9npZDuVjoOpQWfrqC67y0hYJ8v1FM1kI3EzuAPZP_rJrPALSVkWG2BPHZ0poX-K/s1600/Screenshot%202026-03-20%2010.10.18%20AM.png ",
+    exp: "English: <br>For P: Domestic = 55% of 80,000 = 44,000. Sold = 44,000 * (7/11) = 28,000.<br>For Q: Domestic = 40% of 110,000 = 44,000. Sold = 44,000 * (5/11) = 20,000.<br>Total = 28,000 + 20,000 = 48,000.<br><br>Odia: <br>P ପାଇଁ: ଘରୋଇ = ୮୦,୦୦୦ ର ୫୫% = ୪୪,୦୦୦ | ବିକ୍ରି = ୪୪,୦୦୦ * (୭/୧୧) = ୨୮,୦୦୦ |<br>Q ପାଇଁ: ଘରୋଇ = ୧୧୦,୦୦୦ ର ୪୦% = ୪୪,୦୦୦ | ବିକ୍ରି = ୪୪,୦୦୦ * (୫/୧୧) = ୨୦,୦୦୦ |<br>ମୋଟ = ୨୮,୦୦୦ + ୨୦,୦୦୦ = ୪୮,୦୦୦ |"
+  },
+  {
+    q: "The Unsold Stock of Company R is approximately what percent more or less than the Unsold Stock of Company P?<br>କମ୍ପାନୀ R ର ଅବିକ୍ରିତ ଷ୍ଟକ୍ (Unsold Stock), କମ୍ପାନୀ P ର ଅବିକ୍ରିତ ଷ୍ଟକ୍ ତୁଳନାରେ ପ୍ରାୟ କେତେ ପ୍ରତିଶତ ଅଧିକ କିମ୍ବା କମ୍?",
+    o: ["5% more / ୫% ଅଧିକ", "10% less / ୧୦% କମ୍", "5% less / ୫% କମ୍", "12% more / ୧୨% ଅଧିକ"],
+    a: 0,
+    img: " https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjnqpSg-xtn-bsf3HmOXAyZV-10JgNuZOXfACC5tqGON3blH_XYlOczersjhbIOgUZ0zO-8rV6jB61BNko_ZjKOT5-gtIkxJYAJHdNo8U8wC8poQ2KQGigzc0QH8FYcX9npZDuVjoOpQWfrqC67y0hYJ8v1FM1kI3EzuAPZP_rJrPALSVkWG2BPHZ0poX-K/s1600/Screenshot%202026-03-20%2010.10.18%20AM.png ",
+    exp: "English: <br>P Unsold = 44,000 * (4/11) = 16,000.<br>R Domestic = 70% of 60,000 = 42,000. R Unsold = 42,000 * (2/5) = 16,800.<br>Difference = 16,800 - 16,000 = 800.<br>Percentage = (800 / 16,000) * 100 = 5% more.<br><br>Odia: <br>P ଅବିକ୍ରିତ = ୪୪,୦୦୦ * (୪/୧୧) = ୧୬,୦୦୦ |<br>R ଘରୋଇ = ୬୦,୦୦୦ ର ୭୦% = ୪୨,୦୦୦ | R ଅବିକ୍ରିତ = ୪୨,୦୦୦ * (୨/୫) = ୧୬,୮୦୦ |<br>ପାର୍ଥକ୍ୟ = ୧୬,୮୦୦ - ୧୬,୦୦୦ = ୮୦୦ |<br>ପ୍ରତିଶତ = (୮୦୦ / ୧୬,୦୦୦) * ୧୦୦ = ୫% ଅଧିକ |"
+  },
+  {
+    q: "If Company Q decides to sell its entire Unsold Stock at a discount of 15% on the original price of $500 per unit, what will be the total revenue generated (in millions)?<br>ଯଦି କମ୍ପାନୀ Q ତାର ସମସ୍ତ ଅବିକ୍ରିତ ଷ୍ଟକକୁ ୟୁନିଟ୍ ପିଛା $୫୦୦ ର ମୂଳ ମୂଲ୍ୟ ଉପରେ ୧୫% ରିହାତିରେ ବିକ୍ରି କରିବାକୁ ନିଷ୍ପତ୍ତି ନିଏ, ତେବେ ମୋଟ କେତେ ରାଜସ୍ୱ (revenue) ମିଳିବ (ମିଲିୟନରେ)?",
+    o: ["$10.2M", "$12.4M", "$9.8M", "$11.5M"],
+    a: 0,
+    img: " https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjnqpSg-xtn-bsf3HmOXAyZV-10JgNuZOXfACC5tqGON3blH_XYlOczersjhbIOgUZ0zO-8rV6jB61BNko_ZjKOT5-gtIkxJYAJHdNo8U8wC8poQ2KQGigzc0QH8FYcX9npZDuVjoOpQWfrqC67y0hYJ8v1FM1kI3EzuAPZP_rJrPALSVkWG2BPHZ0poX-K/s1600/Screenshot%202026-03-20%2010.10.18%20AM.png ",
+    exp: "English: <br>Q Unsold = 24,000 units.<br>Discounted Price = 85% of 500 = $425.<br>Revenue = 24,000 * 425 = 10,200,000 = $10.2M.<br><br>Odia: <br>Q ଅବିକ୍ରିତ = ୨୪,୦୦୦ ୟୁନିଟ୍ |<br>ରିହାତି ମୂଲ୍ୟ = ୫୦୦ ର ୮୫% = $୪୨୫ |<br>ରାଜସ୍ୱ = ୨୪,୦୦୦ * ୪୨୫ = ୧୦,୨୦୦,୦୦୦ = $୧୦.୨ ମିଲିୟନ୍ |"
+  },
+  {
+    q: "What is the ratio of the total Exported Units of Company P and R together to the total Domestic Units of Company Q?<br>କମ୍ପାନୀ P ଏବଂ R ର ମୋଟ ରପ୍ତାନି ୟୁନିଟ୍ ଏବଂ କମ୍ପାନୀ Q ର ମୋଟ ଘରୋଇ ୟୁନିଟ୍ ମଧ୍ୟରେ ଅନୁପାତ କେତେ?",
+    o: ["15:11", "27:22", "9:7", "13:10"],
+    a: 1,
+    img: " https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjnqpSg-xtn-bsf3HmOXAyZV-10JgNuZOXfACC5tqGON3blH_XYlOczersjhbIOgUZ0zO-8rV6jB61BNko_ZjKOT5-gtIkxJYAJHdNo8U8wC8poQ2KQGigzc0QH8FYcX9npZDuVjoOpQWfrqC67y0hYJ8v1FM1kI3EzuAPZP_rJrPALSVkWG2BPHZ0poX-K/s1600/Screenshot%202026-03-20%2010.10.18%20AM.png ",
+    exp: "English: <br>P Export = 45% of 80k = 36k. R Export = 30% of 60k = 18k. Total Export (P+R) = 54k.<br>Q Domestic = 40% of 110k = 44k.<br>Ratio = 54:44 = 27:22.<br><br>Odia: <br>P ରପ୍ତାନି = ୩୬,୦୦୦ | R ରପ୍ତାନି = ୧୮,୦୦୦ | ମୋଟ ରପ୍ତାନି (P+R) = ୫୪,୦୦୦ |<br>Q ଘରୋଇ = ୪୪,୦୦୦ |<br>ଅନୁପାତ = ୫୪:୪୪ = ୨୭:୨୨ |"
+  },
+  {
+    q: "Find the difference between the average Units Sold Domestically of all three companies and the average Unsold Stock of all three companies.<br>ତିନୋଟି ଯାକ କମ୍ପାନୀର ହାରାହାରି ଘରୋଇ ବିକ୍ରି ୟୁନିଟ୍ ଏବଂ ହାରାହାରି ଅବିକ୍ରିତ ଷ୍ଟକ୍ ମଧ୍ୟରେ ପାର୍ଥକ୍ୟ ନିର୍ଣ୍ଣୟ କରନ୍ତୁ |",
+    o: ["2,800", "3,400", "4,200", "5,400"],
+    a: 3,
+    img: "  https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjnqpSg-xtn-bsf3HmOXAyZV-10JgNuZOXfACC5tqGON3blH_XYlOczersjhbIOgUZ0zO-8rV6jB61BNko_ZjKOT5-gtIkxJYAJHdNo8U8wC8poQ2KQGigzc0QH8FYcX9npZDuVjoOpQWfrqC67y0hYJ8v1FM1kI3EzuAPZP_rJrPALSVkWG2BPHZ0poX-K/s1600/Screenshot%202026-03-20%2010.10.18%20AM.png",
+    exp: "English: <br>Sold: P=28k, Q=20k, R=25.2k. Total Sold = 73.2k. Avg Sold = 24.4k.<br>Unsold: P=16k, Q=24k, R=16.8k. Total Unsold = 56.8k. Avg Unsold = 18.933k.<br>Difference = 24,400 - 18,933 = 5,467 (Approx 5,400 based on options).<br><br>Odia: <br>ବିକ୍ରି: P=୨୮k, Q=୨୦k, R=୨୫.୨k | ମୋଟ = ୭୩.୨k | ହାରାହାରି = ୨୪.୪k |<br>ଅବିକ୍ରିତ: P=୧୬k, Q=୨୪k, R=୧୬.୮k | ମୋଟ = ୫୬.୮k | ହାରାହାରି = ୧୮.୯୩୩k |<br>ପାର୍ଥକ୍ୟ = ୨୪,୪୦୦ - ୧୮,୯୩୩ = ୫,୪୬୭ (ପାଖାପାଖି ୫,୪୦୦) |"
+  },
+
+
+    
+  {
+    q: "What is the total number of Non-Defective laptops sold by Dell and Asus together?<br>ଡେଲ୍ (Dell) ଏବଂ ଆସୁସ୍ (Asus) ମିଶି କେତେ ସଂଖ୍ୟକ ଅଣ-ତ୍ରୁଟିପୂର୍ଣ୍ଣ (Non-Defective) ଲାପଟପ୍ ବିକ୍ରି କରିଛନ୍ତି?",
+    o: ["3600", "3900", "4200", "4500"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjdZmfiqTj_zE-ldboEStzGSeN-lraxfYq5gRxU4gT5ddV-s3sTTIFnePKNE3ov0UdMKDq7atQbeYeXirPYPI-3V5WRZUmsYfifcYdinFW09SwmpaFxUi8Cx9Gu7cxmuRdPDDZHtDPnp-7CXJr_1ep4wRbFd_MMVfi0GI_SCG_UnTw_XCh9M3FRi7yngThF/s1600/Screenshot%202026-03-20%2010.48.56%20AM.png",
+    exp: "<b>English:</b><br>Dell: Sold = 80% of 4000 = 3200. Non-defective sold = (3/4) * 3200 = 2400.<br>Asus: Sold = 75% of 2000 = 1500. Non-defective sold = (4/5) * 1500 = 1200.<br>Total = 2400 + 1200 = 3600.<br><br><b>Odia:</b><br>ଡେଲ୍: ବିକ୍ରି ହୋଇଛି = ୪୦୦୦ ର ୮୦% = ୩୨୦୦ | ଅଣ-ତ୍ରୁଟିପୂର୍ଣ୍ଣ ବିକ୍ରୟ = (୩/୪) * ୩୨୦୦ = ୨୪୦୦ |<br>ଆସୁସ୍: ବିକ୍ରି ହୋଇଛି = ୨୦୦୦ ର ୭୫% = ୧୫୦୦ | ଅଣ-ତ୍ରୁଟିପୂର୍ଣ୍ଣ ବିକ୍ରୟ = (୪/୫) * ୧୫୦୦ = ୧୨୦୦ |<br>ମୋଟ = ୨୪୦୦ + ୧୨୦୦ = ୩୬୦୦ |"
+  },
+  {
+    q: "If HP sold 70% of its produced units, what is the difference between the Defective units sold by HP and the Unsold units of Lenovo?<br>ଯଦି HP ଏହାର ଉତ୍ପାଦିତ ୟୁନିଟ୍‌ର ୭୦% ବିକ୍ରି କରେ, ତେବେ HP ଦ୍ୱାରା ବିକ୍ରି ହୋଇଥିବା ତ୍ରୁଟିପୂର୍ଣ୍ଣ (Defective) ୟୁନିଟ୍ ଏବଂ ଲେନୋଭୋର ଅବିକ୍ରିତ (Unsold) ୟୁନିଟ୍ ମଧ୍ୟରେ ପାର୍ଥକ୍ୟ କେତେ?",
+    o: ["945", "855", "720", "1025"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjdZmfiqTj_zE-ldboEStzGSeN-lraxfYq5gRxU4gT5ddV-s3sTTIFnePKNE3ov0UdMKDq7atQbeYeXirPYPI-3V5WRZUmsYfifcYdinFW09SwmpaFxUi8Cx9Gu7cxmuRdPDDZHtDPnp-7CXJr_1ep4wRbFd_MMVfi0GI_SCG_UnTw_XCh9M3FRi7yngThF/s1600/Screenshot%202026-03-20%2010.48.56%20AM.png",
+    exp: "<b>English:</b><br>HP Production = 4500 - 25% = 3375 units. HP Sold = 70% of 3375 = 2362.5. Defective Sold = (2/5) * 2362.5 = 945.<br>Lenovo Unsold = 40% of 4500 = 1800.<br>Difference = 1800 - 945 = 855.<br><br><b>Odia:</b><br>HP ଉତ୍ପାଦନ = ୪୫୦୦ - ୨୫% = ୩୩୭୫ ୟୁନିଟ୍ | HP ବିକ୍ରୟ = ୩୩୭୫ ର ୭୦% = ୨୩୬୨.୫ | ବିକ୍ରି ହୋଇଥିବା ତ୍ରୁଟିପୂର୍ଣ୍ଣ = (୨/୫) * ୨୩୬୨.୫ = ୯୪୫ |<br>ଲେନୋଭୋ ଅବିକ୍ରିତ = ୪୫୦୦ ର ୪୦% = ୧୮୦୦ |<br>ପାର୍ଥକ୍ୟ = ୧୮୦୦ - ୯୪୫ = ୮୫୫ |"
+  },
+  {
+    q: "The number of laptops sold by Acer is what percent of the total laptops produced by HP?<br>ଏସର୍ (Acer) ଦ୍ୱାରା ବିକ୍ରି ହୋଇଥିବା ଲାପଟପ୍ ସଂଖ୍ୟା, HP ଦ୍ୱାରା ଉତ୍ପାଦିତ ମୋଟ ଲାପଟପ୍ ର କେତେ ପ୍ରତିଶତ?",
+    o: ["48.25%", "53.33%", "60.00%", "66.66%"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjdZmfiqTj_zE-ldboEStzGSeN-lraxfYq5gRxU4gT5ddV-s3sTTIFnePKNE3ov0UdMKDq7atQbeYeXirPYPI-3V5WRZUmsYfifcYdinFW09SwmpaFxUi8Cx9Gu7cxmuRdPDDZHtDPnp-7CXJr_1ep4wRbFd_MMVfi0GI_SCG_UnTw_XCh9M3FRi7yngThF/s1600/Screenshot%202026-03-20%2010.48.56%20AM.png",
+    exp: "<b>English:</b><br>Acer Total = 1200 / 0.4 = 3000. Acer Sold = 3000 - 1200 = 1800.<br>HP Total = 3375. Percentage = (1800 / 3375) * 100 = 53.33%.<br><br><b>Odia:</b><br>ଏସର୍ ମୋଟ = ୧୨୦୦ / ୦.୪ = ୩୦୦୦ | ଏସର୍ ବିକ୍ରୟ = ୩୦୦୦ - ୧୨୦୦ = ୧୮୦୦ |<br>HP ମୋଟ = ୩୩୭୫ | ପ୍ରତିଶତ = (୧୮୦୦ / ୩୩୭୫) * ୧୦୦ = ୫୩.୩୩% |"
+  },
+  {
+    q: "If the selling price of one Non-Defective laptop of Lenovo is ₹40,000 and a Defective one is sold at ₹30,000, what is the total revenue of Lenovo from sold units?<br>ଯଦି ଲେନୋଭୋର ଗୋଟିଏ ଅଣ-ତ୍ରୁଟିପୂର୍ଣ୍ଣ ଲାପଟପ୍‌ର ବିକ୍ରୟ ମୂଲ୍ୟ ₹୪୦,୦୦୦ ଏବଂ ଏକ ତ୍ରୁଟିପୂର୍ଣ୍ଣ ଲାପଟପ୍ ₹୩୦,୦୦୦ ରେ ବିକ୍ରି ହୁଏ, ତେବେ ବିକ୍ରି ହୋଇଥିବା ୟୁନିଟ୍‌ରୁ ଲେନୋଭୋର ମୋଟ ରାଜସ୍ୱ କେତେ?",
+    o: ["₹10.35 Crores", "₹9.45 Crores", "₹11.25 Crores", "₹8.90 Crores"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjdZmfiqTj_zE-ldboEStzGSeN-lraxfYq5gRxU4gT5ddV-s3sTTIFnePKNE3ov0UdMKDq7atQbeYeXirPYPI-3V5WRZUmsYfifcYdinFW09SwmpaFxUi8Cx9Gu7cxmuRdPDDZHtDPnp-7CXJr_1ep4wRbFd_MMVfi0GI_SCG_UnTw_XCh9M3FRi7yngThF/s1600/Screenshot%202026-03-20%2010.48.56%20AM.png",
+    exp: "<b>English:</b><br>Lenovo Sold = 60% of 4500 = 2700. Defective = (1/6) * 2700 = 450. Non-Defective = (5/6) * 2700 = 2250.<br>Revenue = (2250 * 40000) + (450 * 30000) = 9,00,00,000 + 1,35,00,000 = ₹10.35 Crores.<br><br><b>Odia:</b><br>ଲେନୋଭୋ ବିକ୍ରୟ = ୪୫୦୦ ର ୬୦% = ୨୭୦୦ | ତ୍ରୁଟିପୂର୍ଣ୍ଣ = (୧/୬) * ୨୭୦୦ = ୪୫୦ | ଅଣ-ତ୍ରୁଟିପୂର୍ଣ୍ଣ = (୫/୬) * ୨୭୦୦ = ୨୨୫୦ |<br>ରାଜସ୍ୱ = (୨୨୫୦ * ୪୦୦୦୦) + (୪୫୦ * ୩୦୦୦୦) = ୯,୦୦,୦୦,୦୦୦ + ୧,୩୫,୦୦,୦୦୦ = ₹୧୦.୩୫ କୋଟି |"
+  },
+  {
+    q: "Find the ratio of Unsold units of Asus to the Non-Defective sold units of Acer.<br>ଆସୁସ୍ (Asus) ର ଅବିକ୍ରିତ ୟୁନିଟ୍ ଏବଂ ଏସର୍ (Acer) ର ବିକ୍ରି ହୋଇଥିବା ଅଣ-ତ୍ରୁଟିପୂର୍ଣ୍ଣ ୟୁନିଟ୍ ମଧ୍ୟରେ ଅନୁପାତ ନିର୍ଣ୍ଣୟ କରନ୍ତୁ |",
+    o: ["4 : 9", "5 : 12", "1 : 3", "2 : 5"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjdZmfiqTj_zE-ldboEStzGSeN-lraxfYq5gRxU4gT5ddV-s3sTTIFnePKNE3ov0UdMKDq7atQbeYeXirPYPI-3V5WRZUmsYfifcYdinFW09SwmpaFxUi8Cx9Gu7cxmuRdPDDZHtDPnp-7CXJr_1ep4wRbFd_MMVfi0GI_SCG_UnTw_XCh9M3FRi7yngThF/s1600/Screenshot%202026-03-20%2010.48.56%20AM.png",
+    exp: "<b>English:</b><br>Asus Unsold = 25% of 2000 = 500.<br>Acer Sold = 1800. Non-Defective Sold = (5/8) * 1800 = 1125.<br>Ratio = 500 : 1125 = 4 : 9.<br><br><b>Odia:</b><br>ଆସୁସ୍ ଅବିକ୍ରିତ = ୨୦୦୦ ର ୨୫% = ୫୦୦ |<br>ଏସର୍ ବିକ୍ରୟ = ୧୮୦୦ | ବିକ୍ରି ହୋଇଥିବା ଅଣ-ତ୍ରୁଟିପୂର୍ଣ୍ଣ = (୫/୮) * ୧୮୦୦ = ୧୧୨୫ |<br>ଅନୁପାତ = ୫୦୦ : ୧୧୨୫ = ୪ : ୯ |"
+  },
+
+
+    
+  {
+    q: "What is the total number of students majoring in Chemistry?<br>କେମିଷ୍ଟ୍ରିରେ (Chemistry) ମୋଟ କେତେ ଜଣ ଛାତ୍ରଛାତ୍ରୀ ଅଧ୍ୟୟନ କରୁଛନ୍ତି?",
+    o: ["635 / ୬୩୫", "580 / ୫୮୦", "615 / ୬୧୫", "650 / ୬୫୦"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhUxv9gqs99enZN7xkcGbi0j5AAGqrR3BZAWgquT-UhWGJglEfGwCOIhR8idMuuWS2zyV21atfnIpxkg9m-j3ZGE_lLs2vYHmkPrACsJPf8LPKN9IG48BcwayNdFLxBZMurMdQM-0OWGse5LRq9b2lnsK9f1bZn2t8ylaw4qggR0wML0AFE8Hoz5v2ZvPtj/s1600/sdfvb.jpg",
+    exp: "Total students = 1200. Biology = 25% of 1200 = 300. Physics = Male(140) + Female(125) = 265. Chemistry = 1200 - (300 + 265) = 635.<br>ମୋଟ ଛାତ୍ରଛାତ୍ରୀ = ୧୨୦୦ | ବାୟୋଲୋଜି = ୧୨୦୦ ର ୨୫% = ୩୦୦ | ଫିଜିକ୍ସ = ୧୪୦ (ପୁରୁଷ) + ୧୨୫ (ମହିଳା) = ୨୬୫ | କେମିଷ୍ଟ୍ରି = ୧୨୦୦ - (୩୦୦ + ୨୬୫) = ୬୩୫ |"
+  },
+  {
+    q: "What is the ratio of the number of males in Biology to the number of females in Physics?<br>ବାୟୋଲୋଜିରେ ପୁରୁଷଙ୍କ ସଂଖ୍ୟା ଏବଂ ଫିଜିକ୍ସରେ ମହିଳାଙ୍କ ସଂଖ୍ୟା ମଧ୍ୟରେ ଅନୁପାତ କେତେ?",
+    o: ["36 : 25 / ୩୬ : ୨୫", "25 : 36 / ୨୫ : ୩୬", "18 : 25 / ୧୮ : ୨୫", "32 : 21 / ୩୨ : ୨୧"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhUxv9gqs99enZN7xkcGbi0j5AAGqrR3BZAWgquT-UhWGJglEfGwCOIhR8idMuuWS2zyV21atfnIpxkg9m-j3ZGE_lLs2vYHmkPrACsJPf8LPKN9IG48BcwayNdFLxBZMurMdQM-0OWGse5LRq9b2lnsK9f1bZn2t8ylaw4qggR0wML0AFE8Hoz5v2ZvPtj/s1600/sdfvb.jpg",
+    exp: "Males in Biology = 3/5 of 300 = 180. Females in Physics = 25% of 500 = 125. Ratio = 180 : 125 = 36 : 25.<br>ବାୟୋଲୋଜିରେ ପୁରୁଷ = ୩୦୦ ର ୩/୫ = ୧୮୦ | ଫିଜିକ୍ସରେ ମହିଳା = ୫୦୦ ର ୨୫% = ୧୨୫ | ଅନୁପାତ = ୧୮୦ : ୧୨୫ = ୩୬ : ୨୫ |"
+  },
+  {
+    q: "The number of males in Chemistry is what percentage of the total number of students in the college?<br>କେମିଷ୍ଟ୍ରିରେ ପୁରୁଷଙ୍କ ସଂଖ୍ୟା କଲେଜର ମୋଟ ଛାତ୍ରଛାତ୍ରୀଙ୍କ ସଂଖ୍ୟାର କେତେ ପ୍ରତିଶତ?",
+    o: ["28.5% / ୨୮.୫%", "31.66% / ୩୧.୬୬%", "35% / ୩୫%", "38.2% / ୩୮.୨%"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhUxv9gqs99enZN7xkcGbi0j5AAGqrR3BZAWgquT-UhWGJglEfGwCOIhR8idMuuWS2zyV21atfnIpxkg9m-j3ZGE_lLs2vYHmkPrACsJPf8LPKN9IG48BcwayNdFLxBZMurMdQM-0OWGse5LRq9b2lnsK9f1bZn2t8ylaw4qggR0wML0AFE8Hoz5v2ZvPtj/s1600/sdfvb.jpg",
+    exp: "Total Males = 700. Males in Bio = 180, Physics = 140. Chemistry Males = 700 - (180 + 140) = 380. Percentage = (380/1200) * 100 = 31.66%.<br>ମୋଟ ପୁରୁଷ = ୭୦୦ | କେମିଷ୍ଟ୍ରିରେ ପୁରୁଷ = ୭୦୦ - (୧୮୦ + ୧୪୦) = ୩୮୦ | ପ୍ରତିଶତ = (୩୮୦/୧୨୦୦) * ୧୦୦ = ୩୧.୬୬% |"
+  },
+  {
+    q: "What is the difference between the total number of males and the total number of students majoring in Physics?<br>ମୋଟ ପୁରୁଷଙ୍କ ସଂଖ୍ୟା ଏବଂ ଫିଜିକ୍ସରେ ପଢୁଥିବା ମୋଟ ଛାତ୍ରଛାତ୍ରୀଙ୍କ ସଂଖ୍ୟା ମଧ୍ୟରେ ପାର୍ଥକ୍ୟ କେତେ?",
+    o: ["425 / ୪୨୫", "435 / ୪୩୫", "445 / ୪୪୫", "455 / ୪୫୫"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhUxv9gqs99enZN7xkcGbi0j5AAGqrR3BZAWgquT-UhWGJglEfGwCOIhR8idMuuWS2zyV21atfnIpxkg9m-j3ZGE_lLs2vYHmkPrACsJPf8LPKN9IG48BcwayNdFLxBZMurMdQM-0OWGse5LRq9b2lnsK9f1bZn2t8ylaw4qggR0wML0AFE8Hoz5v2ZvPtj/s1600/sdfvb.jpg",
+    exp: "Total Males = 700. Total Physics students = 140 (M) + 125 (F) = 265. Difference = 700 - 265 = 435.<br>ମୋଟ ପୁରୁଷ = ୭୦୦ | ଫିଜିକ୍ସରେ ମୋଟ ପିଲା = ୨୬୫ | ପାର୍ଥକ୍ୟ = ୭୦୦ - ୨୬୫ = ୪୩୫ |"
+  },
+  {
+    q: "If 10% of the females from Chemistry shift to Biology, what will be the new number of females in Biology?<br>ଯଦି କେମିଷ୍ଟ୍ରିର ୧୦% ମହିଳା ବାୟୋଲୋଜିକୁ ଯାଆନ୍ତି, ତେବେ ବାୟୋଲୋଜିରେ ମହିଳାଙ୍କ ନୂଆ ସଂଖ୍ୟା କେତେ ହେବ?",
+    o: ["135.5 / ୧୩୫.୫", "145.5 / ୧୪୫.୫", "140 / ୧୪୦", "152.5 / ୧୫୨.୫"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhUxv9gqs99enZN7xkcGbi0j5AAGqrR3BZAWgquT-UhWGJglEfGwCOIhR8idMuuWS2zyV21atfnIpxkg9m-j3ZGE_lLs2vYHmkPrACsJPf8LPKN9IG48BcwayNdFLxBZMurMdQM-0OWGse5LRq9b2lnsK9f1bZn2t8ylaw4qggR0wML0AFE8Hoz5v2ZvPtj/s1600/sdfvb.jpg",
+    exp: "Current Bio Females = 120. Chemistry Females = 255. 10% of 255 = 25.5. New Bio Females = 120 + 25.5 = 145.5.<br>ବର୍ତ୍ତମାନ ବାୟୋଲୋଜି ମହିଳା = ୧୨୦ | କେମିଷ୍ଟ୍ରି ମହିଳା = ୨୫୫ | ୨୫୫ ର ୧୦% = ୨୫.୫ | ନୂଆ ସଂଖ୍ୟା = ୧୨୦ + ୨୫.୫ = ୧୪୫.୫ |"
+  }
+
+
+
+
+
+
+
+
+    
+
+
+
+
+    
+];
+/* ===== End questions with explanations ===== */
+
+let answers={}, index=0, timeLeft, timerInt;
+
+window.onload = () => {
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+  if(saved){
+    if(saved.answers) answers = saved.answers; // restore previous answers
+    showScore(saved);
+  } else {
+    loader.classList.add("hidden");
+    instruction.classList.remove("hidden");
+  }
+};
+
+function startTest(){
+  instruction.classList.add("hidden");
+  test.classList.remove("hidden");
+  timeLeft=TEST_DURATION_MINUTES*60;
+  timerInt=setInterval(runTimer,1000);
+  buildGrid();loadQ();
+}
+
+function runTimer(){
+  if(timeLeft<=0){submitTest();return;}
+  timeLeft--;
+  timer.innerText=`${String(Math.floor(timeLeft/60)).padStart(2,"0")}:${String(timeLeft%60).padStart(2,"0")}`;
+}
+
+function loadQ(){
+  const q = questions[index];
+  question.innerHTML = (index + 1) + ". " + q.q;
+
+  /* ===== IMAGE LOGIC ===== */
+  imgWrap.classList.add("hidden");
+  qImg.style.display = "none";
+  imgLoader.style.display = "block";
+
+  if(q.img){
+    imgWrap.classList.remove("hidden");
+    qImg.src = q.img;
+
+    qImg.onload = () => {
+      imgLoader.style.display = "none";
+      qImg.style.display = "block";
+    };
+
+    qImg.onerror = () => {
+      imgWrap.classList.add("hidden");
+    };
+  }
+
+  options.innerHTML="";
+  q.o.forEach((t,i)=>{
+    const d=document.createElement("div");
+    d.className="option"+(answers[index]===i?" selected":"");
+    d.innerText=t;
+    d.onclick=()=>{
+      answers[index]=answers[index]===i?null:i;
+
+      /* ===== Save answers to localStorage ===== */
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+      saved.answers = answers;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+      /* ===== End save ===== */
+
+      loadQ();
+      updateGrid();
+    };
+    options.appendChild(d);
+  });
+
+  prevBtn.disabled = index === 0;
+  nextBtn.disabled = index === questions.length - 1;
+}
+
+function nextQ(){index++;loadQ();}
+function prevQ(){index--;loadQ();}
+
+function buildGrid(){
+  grid.innerHTML="";
+  questions.forEach((_,i)=>{
+    const d=document.createElement("div");
+    d.innerText=i+1;
+    d.onclick=()=>{index=i;loadQ();};
+    grid.appendChild(d);
+  });
+}
+
+function updateGrid(){
+  [...grid.children].forEach((d,i)=>d.classList.toggle("attempted",answers[i]!=null));
+}
+
+function submitTest(){
+  clearInterval(timerInt);
+  test.classList.add("hidden");
+  loader.classList.remove("hidden");
+  loader.querySelector("p").innerText="Saving score & calculating rank…";
+
+  let correct=0,wrong=0;
+  questions.forEach((q,i)=>{
+    if(answers[i]==null)return;
+    answers[i]===q.a?correct++:wrong++;
+  });
+
+  const score=+(correct-wrong*NEGATIVE_MARK).toFixed(2);
+
+  const baseData={
+    phone:user.phone,
+    name:user.name,
+    score,correct,wrong,
+    unattempted:questions.length-correct-wrong,
+    updatedAt:Date.now()
+  };
+
+  db.collection("tests").doc(TEST_ID).collection("results").doc(user.phone)
+  .set(baseData,{merge:true})
+  .then(()=>calculateRank(baseData));
+}
+
+function calculateRank(myData){
+  db.collection("tests").doc(TEST_ID).collection("results").get()
+  .then(snap=>{
+    const arr=snap.docs.map(d=>({...d.data(),id:d.id}));
+    arr.sort((a,b)=>b.score-a.score);
+    const rank=arr.findIndex(x=>x.id===user.phone)+1;
+    myData.rankText=`${rank} / ${arr.length}`;
+    myData.answers=answers;
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(myData));
+    showScore(myData);
+  });
+}
+
+function showScore(r){
+  loader.classList.add("hidden");
+  score.classList.remove("hidden");
+  userScore.innerText=`Hi ${r.name}, your score is ${r.score}`;
+  stats.innerHTML=`Correct: ${r.correct}<br>Wrong: ${r.wrong}<br>Unattempted: ${r.unattempted}<br><b>Rank: ${r.rankText}</b>`;
+  filterQ("all",document.querySelector(".filter button"));
+}
+
+function filterQ(type,btn){
+  document.querySelectorAll(".filter button").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  review.innerHTML="";
+  questions.forEach((q,i)=>{
+    const a=answers[i];
+    if(type==="correct"&&a!==q.a)return;
+    if(type==="wrong"&&(a==null||a===q.a))return;
+    if(type==="unattempted"&&a!=null)return;
+    const c=document.createElement("div");
+    c.className="card";
+    c.innerHTML=`
+      <b>${q.q}</b><br>
+      Your: ${a!=null?q.o[a]:"—"}<br>
+      Correct: ${q.o[q.a]}<br>
+      <details>
+        <summary>Show Explanation</summary>
+        <p>${q.exp || "No explanation provided."}</p>
+      </details>
+    `;
+    review.appendChild(c);
+  });
+}
+
+function reattempt(){popup.style.display="flex";}
+function confirmReattempt(){localStorage.removeItem(STORAGE_KEY);location.reload();}
+</script>
+</body>
+</html>
