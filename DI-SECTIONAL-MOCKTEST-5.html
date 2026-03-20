@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EduMocker Test</title>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<style>
+  .q-image-wrap{margin:12px 0;display:flex;justify-content:center;align-items:center}
+  .img-loader{width:50px;height:50px;border:5px solid #ddd;border-top:5px solid #2c5364;border-radius:50%;animation:spin 1s linear infinite}
+  .q-image{max-width:100%;border-radius:12px;display:none}
+  *{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}
+  body{margin:0;background:#f4f6f8;padding:0}
+  .loader{height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center}
+  .circle{width:70px;height:70px;border:7px solid #ddd;border-top:7px solid #2c5364;border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .hidden{display:none}
+  .header{background:#fff;padding:12px;display:flex;justify-content:space-between;border-bottom:1px solid #ddd}
+  .container{padding:14px}
+  button{padding:12px;border:none;border-radius:10px;background:#2c5364;color:#fff;font-size:15px;cursor:pointer}
+  button:disabled{opacity:.4}
+  .q-inst{font-size:14px}
+  .question{font-weight:bold;margin:8px 0}
+  .option{background:#fff;border:1px solid #ccc;padding:12px;border-radius:10px;margin-bottom:10px;cursor:pointer}
+  .option.selected{background:#e8f1f5;border-color:#2c5364}
+  .nav{display:flex;justify-content:space-between;margin:10px 0}
+  .grid{display:flex;flex-wrap:wrap;gap:6px}
+  .grid div{width:32px;height:32px;border:1px solid #2c5364;display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .grid .attempted{background:#2c5364;color:#fff;border-radius:50%}
+  .score{padding:16px}
+  .card{background:#fff;padding:12px;border-radius:12px;margin-bottom:10px}
+  .filter{display:flex;gap:6px;margin-top:10px}
+  .filter button{flex:1;background:#ccc;color:#000}
+  .filter .active{background:#2c5364;color:#fff}
+  .popup{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;justify-content:center;align-items:center}
+  .popup-box{background:#fff;padding:18px;border-radius:14px;width:85%;text-align:center}
+</style>
+</head>
+<body>
+
+<div id="loader" class="loader">
+  <div class="circle"></div>
+  <p>Checking user…</p>
+</div>
+
+<div id="instruction" class="hidden container">
+  <h3>DI Sectional Mocktests Set - 5</h3>
+  <ul>
+    <li>Time: 25 Minutes</li>
+    <li>Negative Marking: 0.25 per wrong answer</li>
+    <li>Submit anytime</li>
+  </ul>
+  <button onclick="startTest()">Start Test</button>
+</div>
+
+<div id="test" class="hidden">
+  <div class="header">
+    <b></b>
+      <div class="q-inst">DI Sectional Mocktests Set - 5</div>
+    <span id="timer">25:00</span>
+  </div>
+  <div class="container">
+    
+    
+
+    <div id="imgWrap" class="q-image-wrap hidden">
+      <div id="imgLoader" class="img-loader"></div>
+      <img id="qImg" class="q-image">
+    </div>
+<div class="question" id="question"></div>
+    <div id="options"></div>
+
+    <div class="nav">
+      <button id="prevBtn" onclick="prevQ()">Previous</button>
+      <button id="nextBtn" onclick="nextQ()">Next</button>
+    </div>
+
+    <div class="grid" id="grid"></div>
+    <br>
+    <button onclick="submitTest()">Submit Test</button>
+  </div>
+</div>
+
+<div id="score" class="hidden score">
+  <h3>DI Sectional SET 5</h3>
+  <p id="userScore"></p>
+  <div class="card" id="stats"></div>
+
+  <div class="filter">
+    <button class="active" onclick="filterQ('all',this)">All</button>
+    <button onclick="filterQ('correct',this)">Correct</button>
+    <button onclick="filterQ('wrong',this)">Wrong</button>
+    <button onclick="filterQ('unattempted',this)">Unattempted</button>
+  </div>
+
+  <div id="review"></div>
+  <br>
+  <button onclick="reattempt()">Reattempt</button>
+</div>
+
+<div class="popup" id="popup">
+  <div class="popup-box">
+    <p>Your previous score & rank will be replaced.</p>
+    <button onclick="confirmReattempt()">OK</button>
+  </div>
+</div>
+
+<script>
+firebase.initializeApp({
+  apiKey: "AIzaSyBskR7Iuvep9d2W4NoPMilS6jST7pCWFs8",
+  authDomain: "edumocker-pyq.firebaseapp.com",
+  projectId: "edumocker-pyq"
+});
+const db = firebase.firestore();
+
+const TEST_ID = "Di-set--5";
+const STORAGE_KEY = "RESULT_" + TEST_ID;
+const TEST_DURATION_MINUTES = 25;
+const NEGATIVE_MARK = 0.25;
+
+const user = {
+  phone: localStorage.getItem("user_phone"),
+  name: localStorage.getItem("user_name")
+};
+if(!user.phone){ alert("Login required"); throw ""; }
+
+/* ===== Added explanations to questions ===== */
+const questions = [
+
+
+  {
+    q: "What is the average number of Grade B items produced by all five factories together?<br>ସମସ୍ତ ପାଞ୍ଚଟି କାରଖାନା ଦ୍ୱାରା ଉତ୍ପାଦିତ Grade B ସାମଗ୍ରୀର ହାରାହାରି ସଂଖ୍ୟା କେତେ?",
+    o: ["205 / ୨୦୫", "211 / ୨୧୧", "198 / ୧୯୮", "224 / ୨୨୪"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhLgKHOhpJExyP7-QpSNgeqh0vZfRrL3b3Vmii-qg6iuufWTN-O9a9sBzJHKFTK93iVomae2VHSW5ccqkRdUnxsUWTrGjbXzAdFs6T3nLiwvvROOb8pVFjeUsz1Z04r9Xib3kosyOgU90M9CgCcFy6oHU1ilaebyt98K7dXUqfvqxnq15xbkBUEQ79imaTi/s1600/Screenshot%202026-03-20%202.38.56%20PM.png",
+    exp: "<b>English:</b><br>Grade B = Total - Grade A.<br>A: 400 - 40% of 400 = 400 - 160 = 240<br>B: 350 - 60% of 350 = 350 - 210 = 140<br>C: 500 - 30% of 500 = 500 - 150 = 350<br>D: 250 - 80% of 250 = 250 - 200 = 50<br>E: 450 - 50% of 450 = 450 - 225 = 225<br>Total Grade B = 240+140+350+50+225 = 1005.<br>Average = 1005 / 5 = 211.<br><br><b>Odia:</b><br>Grade B = ସମୁଦାୟ - Grade A |<br>A: 400 - 160 = 240<br>B: 350 - 210 = 140<br>C: 500 - 150 = 350<br>D: 250 - 200 = 50<br>E: 450 - 225 = 225<br>ସମୁଦାୟ Grade B = 1005 |<br>ହାରାହାରି = 1005 / 5 = 211 |"
+  },
+  {
+    q: "The number of Grade A items produced by Factory C is what percent more or less than the number of Grade B items produced by Factory D?<br>କାରଖାନା C ଦ୍ୱାରା ଉତ୍ପାଦିତ Grade A ସାମଗ୍ରୀର ସଂଖ୍ୟା, କାରଖାନା D ଦ୍ୱାରା ଉତ୍ପାଦିତ Grade B ସାମଗ୍ରୀର ସଂଖ୍ୟା ଠାରୁ କେତେ ପ୍ରତିଶତ ଅଧିକ ବା କମ୍?",
+    o: ["100% more / ୧୦୦% ଅଧିକ", "200% more / ୨୦୦% ଅଧିକ", "50% less / ୫୦% କମ୍", "200% less / ୨୦୦% କମ୍"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhLgKHOhpJExyP7-QpSNgeqh0vZfRrL3b3Vmii-qg6iuufWTN-O9a9sBzJHKFTK93iVomae2VHSW5ccqkRdUnxsUWTrGjbXzAdFs6T3nLiwvvROOb8pVFjeUsz1Z04r9Xib3kosyOgU90M9CgCcFy6oHU1ilaebyt98K7dXUqfvqxnq15xbkBUEQ79imaTi/s1600/Screenshot%202026-03-20%202.38.56%20PM.png",
+    exp: "<b>English:</b><br>Grade A (C) = 30% of 500 = 150.<br>Grade B (D) = 20% of 250 = 50.<br>Difference = 150 - 50 = 100.<br>Required % = (100 / 50) × 100 = 200% more.<br><br><b>Odia:</b><br>Grade A (C) = 500 ର 30% = 150 |<br>Grade B (D) = 250 ର 20% = 50 |<br>ପାର୍ଥକ୍ୟ = 150 - 50 = 100 |<br>ଆବଶ୍ୟକ ପ୍ରତିଶତ = (100 / 50) × 100 = 200% ଅଧିକ |"
+  },
+  {
+    q: "If Factory F produces 20% more total units than Factory E, and the ratio of Grade A to Grade B items in Factory F is 5:4, find the number of Grade B items in Factory F.<br>ଯଦି କାରଖାନା F, କାରଖାନା E ତୁଳନାରେ ୨୦% ଅଧିକ ସାମଗ୍ରୀ ଉତ୍ପାଦନ କରେ ଏବଂ F ରେ Grade A ଓ Grade B ର ଅନୁପାତ ୫:୪ ହୁଏ, ତେବେ F ରେ Grade B ସାମଗ୍ରୀର ସଂଖ୍ୟା କେତେ?",
+    o: ["240 / ୨୪୦", "300 / ୩୦୦", "210 / ୨୧୦", "270 / ୨୭୦"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhLgKHOhpJExyP7-QpSNgeqh0vZfRrL3b3Vmii-qg6iuufWTN-O9a9sBzJHKFTK93iVomae2VHSW5ccqkRdUnxsUWTrGjbXzAdFs6T3nLiwvvROOb8pVFjeUsz1Z04r9Xib3kosyOgU90M9CgCcFy6oHU1ilaebyt98K7dXUqfvqxnq15xbkBUEQ79imaTi/s1600/Screenshot%202026-03-20%202.38.56%20PM.png",
+    exp: "<b>English:</b><br>Total units Factory E = 450.<br>Total units Factory F = 450 + 20% of 450 = 450 + 90 = 540.<br>Ratio A:B = 5:4. Sum of parts = 9.<br>Grade B in F = (4 / 9) × 540 = 240.<br><br><b>Odia:</b><br>E ର ସମୁଦାୟ ଉତ୍ପାଦନ = 450 |<br>F ର ସମୁଦାୟ ଉତ୍ପାଦନ = 450 + 90 = 540 |<br>ଅନୁପାତ A:B = 5:4 | ଭାଗର ସମଷ୍ଟି = 9 |<br>F ରେ Grade B = (4 / 9) × 540 = 240 |"
+  },
+  {
+    q: "What is the ratio of the total Grade A items produced by Factories A and B together to the total Grade B items produced by Factories D and E together?<br>କାରଖାନା A ଏବଂ B ଦ୍ୱାରା ମିଳିତ ଭାବେ ଉତ୍ପାଦିତ Grade A ସାମଗ୍ରୀ ଏବଂ କାରଖାନା D ଓ E ଦ୍ୱାରା ମିଳିତ ଭାବେ ଉତ୍ପାଦିତ Grade B ସାମଗ୍ରୀର ଅନୁପାତ କେତେ?",
+    o: ["37:25 / ୩୭:୨୫", "74:55 / ୭୪:୫୫", "37:23 / ୩୭:୨୩", "21:29 / ୨୧:୨୯"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhLgKHOhpJExyP7-QpSNgeqh0vZfRrL3b3Vmii-qg6iuufWTN-O9a9sBzJHKFTK93iVomae2VHSW5ccqkRdUnxsUWTrGjbXzAdFs6T3nLiwvvROOb8pVFjeUsz1Z04r9Xib3kosyOgU90M9CgCcFy6oHU1ilaebyt98K7dXUqfvqxnq15xbkBUEQ79imaTi/s1600/Screenshot%202026-03-20%202.38.56%20PM.png",
+    exp: "<b>English:</b><br>Grade A (A+B) = (40% of 400) + (60% of 350) = 160 + 210 = 370.<br>Grade B (D+E) = (20% of 250) + (50% of 450) = 50 + 225 = 275.<br>Ratio = 370 : 275. Dividing by 5, we get 74 : 55.<br><br><b>Odia:</b><br>Grade A (A+B) = 160 + 210 = 370 |<br>Grade B (D+E) = 50 + 225 = 275 |<br>ଅନୁପାତ = 370 : 275 = 74 : 55 |"
+  },
+  {
+    q: "If the cost of producing one Grade A item is $50 and one Grade B item is $30, what is the total production cost for Factory B?<br>ଯଦି ଗୋଟିଏ Grade A ସାମଗ୍ରୀର ଉତ୍ପାଦନ ଖର୍ଚ୍ଚ $50 ଏବଂ ଗୋଟିଏ Grade B ସାମଗ୍ରୀର ଖର୍ଚ୍ଚ $30 ହୁଏ, ତେବେ କାରଖାନା B ର ସମୁଦାୟ ଉତ୍ପାଦନ ଖର୍ଚ୍ଚ କେତେ?",
+    o: ["14,700 / ୧୪,୭୦୦", "15,200 / ୧୫,୨୦୦", "13,900 / ୧୩,୯୦୦", "16,100 / ୧୬,୧୦୦"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhLgKHOhpJExyP7-QpSNgeqh0vZfRrL3b3Vmii-qg6iuufWTN-O9a9sBzJHKFTK93iVomae2VHSW5ccqkRdUnxsUWTrGjbXzAdFs6T3nLiwvvROOb8pVFjeUsz1Z04r9Xib3kosyOgU90M9CgCcFy6oHU1ilaebyt98K7dXUqfvqxnq15xbkBUEQ79imaTi/s1600/Screenshot%202026-03-20%202.38.56%20PM.png",
+    exp: "<b>English:</b><br>Factory B: Grade A = 210, Grade B = 140.<br>Cost = (210 × 50) + (140 × 30)<br>Cost = 10,500 + 4,200 = 14,700.<br><br><b>Odia:</b><br>କାରଖାନା B: Grade A = 210, Grade B = 140 |<br>ମୋଟ ଖର୍ଚ୍ଚ = (210 × 50) + (140 × 30)<br>ମୋଟ ଖର୍ଚ୍ଚ = 10,500 + 4,200 = 14,700 |"
+  },
+
+    
+  {
+    q: "What is the total number of valid votes polled in the election?<br>ନିର୍ବାଚନରେ ମୋଟ କେତେ ସଂଖ୍ୟକ ବୈଧ ଭୋଟ୍ (Valid Votes) ପଡିଥିଲା?",
+    o: ["3,600", "4,000", "3,400", "3,200"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhhjVgGuODzyktL9mwhNPJ5yV5OKBTHzj2JhHRqaY_NomEAAJuOoyFwbnCxau94vEpL7McXrshoUmLUyAZFwK2M670ny0V79gHGsEqAI91z8HpO4uPZ6jMrns13NSEZaf9vBMnmb3ATebkJoaRYFwESCxfX4mCeRg5US_CVgcrUGBXkQzL8nvvUFx2z6WWn/s1600/caslet%20%281%29.jpg",
+    exp: "Total voters = 5000.<br>Votes cast = 80% of 5000 = 4000.<br>Invalid votes = 10% of 4000 = 400.<br>Valid votes = 4000 - 400 = 3600.<br><br>ମୋଟ ଭୋଟର = ୫୦୦୦ |<br>ପୋଲ୍ ହୋଇଥିବା ଭୋଟ୍ = ୫୦୦୦ ର ୮୦% = ୪୦୦୦ |<br>ଅବୈଧ ଭୋଟ୍ = ୪୦୦୦ ର ୧୦% = ୪୦୦ |<br>ବୈଧ ଭୋଟ୍ = ୪୦୦୦ - ୪୦୦ = ୩୬୦୦ |"
+  },
+  {
+    q: "What is the number of votes received by the winner (Candidate A)?<br>ବିଜୟୀ ପ୍ରାର୍ଥୀ (ପ୍ରାର୍ଥୀ A) କେତେ ଭୋଟ୍ ପାଇଛନ୍ତି?",
+    o: ["2,200", "2,000", "1,800", "2,100"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhhjVgGuODzyktL9mwhNPJ5yV5OKBTHzj2JhHRqaY_NomEAAJuOoyFwbnCxau94vEpL7McXrshoUmLUyAZFwK2M670ny0V79gHGsEqAI91z8HpO4uPZ6jMrns13NSEZaf9vBMnmb3ATebkJoaRYFwESCxfX4mCeRg5US_CVgcrUGBXkQzL8nvvUFx2z6WWn/s1600/caslet%20%281%29.jpg",
+    exp: "Let votes of B = x, then A = x + 400.<br>x + x + 400 = 3600 (Valid votes)<br>2x = 3200 => x = 1600.<br>A = 1600 + 400 = 2000.<br><br>ମନେକରନ୍ତୁ B ର ଭୋଟ୍ = x, ତେବେ A = x + ୪୦୦ |<br>x + x + ୪୦୦ = ୩୬୦୦ (ବୈଧ ଭୋଟ୍)<br>୨x = ୩୨୦୦ => x = ୧୬୦୦ |<br>A = ୧୬୦୦ + ୪୦୦ = ୨୦୦୦ |"
+  },
+  {
+    q: "The number of invalid votes is what percentage of the total number of voters in the list?<br>ଅବୈଧ ଭୋଟ୍ ସଂଖ୍ୟା ତାଲିକାରେ ଥିବା ମୋଟ ଭୋଟରଙ୍କ ସଂଖ୍ୟାର କେତେ ପ୍ରତିଶତ?",
+    o: ["10%", "8%", "5%", "12%"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhhjVgGuODzyktL9mwhNPJ5yV5OKBTHzj2JhHRqaY_NomEAAJuOoyFwbnCxau94vEpL7McXrshoUmLUyAZFwK2M670ny0V79gHGsEqAI91z8HpO4uPZ6jMrns13NSEZaf9vBMnmb3ATebkJoaRYFwESCxfX4mCeRg5US_CVgcrUGBXkQzL8nvvUFx2z6WWn/s1600/caslet%20%281%29.jpg",
+    exp: "Invalid votes = 400.<br>Total voters = 5000.<br>Percentage = (400 / 5000) * 100 = 8%.<br><br>ଅବୈଧ ଭୋଟ୍ = ୪୦୦ |<br>ମୋଟ ଭୋଟର = ୫୦୦୦ |<br>ପ୍ରତିଶତ = (୪୦୦ / ୫୦୦୦) * ୧୦୦ = ୮% |"
+  },
+  {
+    q: "What is the ratio of the number of votes received by Candidate B to the number of people who did not cast their votes?<br>ପ୍ରାର୍ଥୀ B ପାଇଥିବା ଭୋଟ୍ ସଂଖ୍ୟା ଏବଂ ଭୋଟ୍ ଦେଇନଥିବା ଲୋକଙ୍କ ସଂଖ୍ୟାର ଅନୁପାତ କେତେ?",
+    o: ["5 : 4", "8 : 5", "4 : 3", "15 : 10"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhhjVgGuODzyktL9mwhNPJ5yV5OKBTHzj2JhHRqaY_NomEAAJuOoyFwbnCxau94vEpL7McXrshoUmLUyAZFwK2M670ny0V79gHGsEqAI91z8HpO4uPZ6jMrns13NSEZaf9vBMnmb3ATebkJoaRYFwESCxfX4mCeRg5US_CVgcrUGBXkQzL8nvvUFx2z6WWn/s1600/caslet%20%281%29.jpg",
+    exp: "Votes of B = 1600.<br>People who did not cast votes = 20% of 5000 = 1000.<br>Ratio = 1600 : 1000 = 16 : 10 = 8 : 5.<br><br>B ର ଭୋଟ୍ = ୧୬୦୦ |<br>ଭୋଟ୍ ଦେଇନଥିବା ଲୋକ = ୫୦୦୦ ର ୨୦% = ୧୦୦୦ |<br>ଅନୁପାତ = ୧୬୦୦ : ୧୦୦୦ = ୮ : ୫ |"
+  },
+  {
+    q: "If in the next election, the number of invalid votes becomes zero (assuming total cast remains same), and the margin remains 400, how many votes would Candidate B receive?<br>ଯଦି ପରବର୍ତ୍ତୀ ନିର୍ବାଚନରେ ଅବୈଧ ଭୋଟ୍ ଶୂନ ହୁଏ ଏବଂ ବ୍ୟବଧାନ ୪୦୦ ରହେ, ତେବେ ପ୍ରାର୍ଥୀ B କେତେ ଭୋଟ୍ ପାଇବେ?",
+    o: ["1,600", "1,800", "2,200", "2,000"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhhjVgGuODzyktL9mwhNPJ5yV5OKBTHzj2JhHRqaY_NomEAAJuOoyFwbnCxau94vEpL7McXrshoUmLUyAZFwK2M670ny0V79gHGsEqAI91z8HpO4uPZ6jMrns13NSEZaf9vBMnmb3ATebkJoaRYFwESCxfX4mCeRg5US_CVgcrUGBXkQzL8nvvUFx2z6WWn/s1600/caslet%20%281%29.jpg",
+    exp: "New Valid votes = Total cast = 4000.<br>A - B = 400 and A + B = 4000.<br>2B = 3600 => B = 1800.<br><br>ନୂତନ ବୈଧ ଭୋଟ୍ = ୪୦୦୦ |<br>A - B = ୪୦୦ ଏବଂ A + B = ୪୦୦୦ |<br>୨B = ୩୬୦୦ => B = ୧୮୦୦ |"
+  },
+
+    
+  {
+    q: "What is the ratio of the total number of boys admitted in 2021 and 2023 together to the total number of girls admitted in 2022 and 2025 together?<br>୨୦୨୧ ଏବଂ ୨୦୨୩ ମସିହାରେ ମୋଟ ନାମ ଲେଖାଇଥିବା ବାଳକ ସଂଖ୍ୟା ଏବଂ ୨୦୨୨ ଏବଂ ୨୦୨୫ ମସିହାରେ ମୋଟ ନାମ ଲେଖାଇଥିବା ବାଳିକା ସଂଖ୍ୟା ମଧ୍ୟରେ ଅନୁପାତ କେତେ?",
+    o: ["16 : 17", "32 : 35", "8 : 9", "64 : 75"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiN6kKbFQXAWDrUx5f2k9V7-6VBXhilhGVbxEz23e8xWAwYVcwM6r5PEUP9jSTzbJqwXiSX5a-Nbze9qHYsoOZbrfQtayvCPibWd3Ojfbo7ZWqbIfUhEX5KBNBko245TSv-4OWT780cdanUaehNxlwYO08YTYI10-_WExMRrQifG8t_vOYY8weW0V4-O_QF/s1600/Screenshot%202026-03-20%203.04.39%20PM.png",
+    exp: "English: Boys (2021 + 2023) = 600 + 1000 = 1600. <br> Girls (2022 + 2025) = 900 + 850 = 1750. <br> Ratio = 1600 : 1750 = 32 : 35. <br><br> Odia: ବାଳକ (୨୦୨୧ + ୨୦୨୩) = ୬୦୦ + ୧୦୦୦ = ୧୬୦୦ | <br> ବାଳିକା (୨୦୨୨ + ୨୦୨୫) = ୯୦୦ + ୮୫୦ = ୧୭୫୦ | <br> ଅନୁପାତ = ୧୬୦୦ : ୧୭୫୦ = ୩୨ : ୩୫ |"
+  },
+  {
+    q: "Referencing the note for 2022: How many Girls continued their studies in 2022 after the dropouts were excluded?<br>୨୦୨୨ ପାଇଁ ଦିଆଯାଇଥିବା ସୂଚନା ଅନୁଯାୟୀ: ଡ୍ରପଆଉଟ୍ (ପାଠପଢା ଛାଡିଥିବା) ବାଦ୍ ଦେବା ପରେ ୨୦୨୨ ମସିହାରେ କେତେଜଣ ବାଳିକା ସେମାନଙ୍କର ପାଠପଢା ଜାରି ରଖିଥିଲେ?",
+    o: ["830 / ୮୩୦", "850 / ୮୫୦", "843 / ୮୪୩", "815 / ୮୧୫"],
+    a: 2,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiN6kKbFQXAWDrUx5f2k9V7-6VBXhilhGVbxEz23e8xWAwYVcwM6r5PEUP9jSTzbJqwXiSX5a-Nbze9qHYsoOZbrfQtayvCPibWd3Ojfbo7ZWqbIfUhEX5KBNBko245TSv-4OWT780cdanUaehNxlwYO08YTYI10-_WExMRrQifG8t_vOYY8weW0V4-O_QF/s1600/Screenshot%202026-03-20%203.04.39%20PM.png",
+    exp: "English: Total (2022) = 800 + 900 = 1700. <br> Total dropouts = 10% of 1700 = 170. <br> Ratio of B:G dropouts = 2:1. Girl dropouts = (1/3) * 170 ≈ 57. <br> Girls continuing = 900 - 57 = 843. <br><br> Odia: ମୋଟ (୨୦୨୨) = ୮୦୦ + ୯୦୦ = ୧୭୦୦ | <br> ମୋଟ ଡ୍ରପଆଉଟ୍ = ୧୭୦୦ ର ୧୦% = ୧୭୦ | <br> ବାଳକ:ବାଳିକା ଡ୍ରପଆଉଟ୍ ଅନୁପାତ = ୨:୧ | ବାଳିକା ଡ୍ରପଆଉଟ୍ = (୧/୩) * ୧୭୦ ≈ ୫୭ | <br> ଅଧ୍ୟୟନ ଜାରି ରଖିଥିବା ବାଳିକା = ୯୦୦ - ୫୭ = ୮୪୩ |"
+  },
+  {
+    q: "In 2024, what is the difference between the number of local (non-international) girls and local (non-international) boys?<br>୨୦୨୪ ମସିହାରେ, ସ୍ଥାନୀୟ (ଅଣ-ଆନ୍ତର୍ଜାତୀୟ) ବାଳିକା ସଂଖ୍ୟା ଏବଂ ସ୍ଥାନୀୟ (ଅଣ-ଆନ୍ତର୍ଜାତୀୟ) ବାଳକ ସଂଖ୍ୟା ମଧ୍ୟରେ ପାର୍ଥକ୍ୟ କେତେ?",
+    o: ["285 / ୨୮୫", "310 / ୩୧୦", "275 / ୨୭୫", "245 / ୨୪୫"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiN6kKbFQXAWDrUx5f2k9V7-6VBXhilhGVbxEz23e8xWAwYVcwM6r5PEUP9jSTzbJqwXiSX5a-Nbze9qHYsoOZbrfQtayvCPibWd3Ojfbo7ZWqbIfUhEX5KBNBko245TSv-4OWT780cdanUaehNxlwYO08YTYI10-_WExMRrQifG8t_vOYY8weW0V4-O_QF/s1600/Screenshot%202026-03-20%203.04.39%20PM.png",
+    exp: "English: Local Girls = 80% of 1100 = 880. <br> Local Boys = 85% of 700 = 595. <br> Difference = 880 - 595 = 285. <br><br> Odia: ସ୍ଥାନୀୟ ବାଳିକା = ୧୧୦୦ ର ୮୦% = ୮୮୦ | <br> ସ୍ଥାନୀୟ ବାଳକ = ୭୦୦ ର ୮୫% = ୫୯୫ | <br> ପାର୍ଥକ୍ୟ = ୮୮୦ - ୫୯୫ = ୨୮୫ |"
+  },
+  {
+    q: "The total students admitted in 2025 is what percent more or less than the total students admitted in 2021?<br>୨୦୨୫ ମସିହାରେ ମୋଟ ନାମ ଲେଖାଇଥିବା ଛାତ୍ରଛାତ୍ରୀଙ୍କ ସଂଖ୍ୟା, ୨୦୨୧ ମସିହାରେ ନାମ ଲେଖାଇଥିବା ମୋଟ ଛାତ୍ରଛାତ୍ରୀଙ୍କ ସଂଖ୍ୟା ତୁଳନାରେ କେତେ ପ୍ରତିଶତ ଅଧିକ କିମ୍ବା କମ୍?",
+    o: ["68.25% More", "71.42% More", "65.50% More", "76.12% More"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiN6kKbFQXAWDrUx5f2k9V7-6VBXhilhGVbxEz23e8xWAwYVcwM6r5PEUP9jSTzbJqwXiSX5a-Nbze9qHYsoOZbrfQtayvCPibWd3Ojfbo7ZWqbIfUhEX5KBNBko245TSv-4OWT780cdanUaehNxlwYO08YTYI10-_WExMRrQifG8t_vOYY8weW0V4-O_QF/s1600/Screenshot%202026-03-20%203.04.39%20PM.png",
+    exp: "English: Total 2021 = 600 + 450 = 1050. <br> Total 2025 = 950 + 850 = 1800. <br> Increase = 1800 - 1050 = 750. <br> % Increase = (750 / 1050) * 100 = 71.42%. <br><br> Odia: ମୋଟ ୨୦୨୧ = ୬୦୦ + ୪୫୦ = ୧୦୫୦ | <br> ମୋଟ ୨୦୨୫ = ୯୫୦ + ୮୫୦ = ୧୮୦୦ | <br> ବୃଦ୍ଧି = ୧୮୦୦ - ୧୦୫୦ = ୭୫୦ | <br> ପ୍ରତିଶତ ବୃଦ୍ଧି = (୭୫୦ / ୧୦୫୦) * ୧୦୦ = ୭୧.୪୨% |"
+  },
+  {
+    q: "If in 2026, the number of boys increases by 20% and girls increase by 10% compared to 2025, what will be the total strength of the university in 2026?<br>ଯଦି ୨୦୨୬ ମସିହାରେ, ୨୦୨୫ ତୁଳନାରେ ବାଳକ ସଂଖ୍ୟା ୨୦% ଏବଂ ବାଳିକା ସଂଖ୍ୟା ୧୦% ବୃଦ୍ଧି ପାଏ, ତେବେ ୨୦୨୬ ରେ ବିଶ୍ୱବିଦ୍ୟାଳୟର ମୋଟ ସଂଖ୍ୟା କେତେ ହେବ?",
+    o: ["2075 / ୨୦୭୫", "2115 / ୨୧୧୫", "2050 / ୨୦୫୦", "2155 / ୨୧୫୫"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiN6kKbFQXAWDrUx5f2k9V7-6VBXhilhGVbxEz23e8xWAwYVcwM6r5PEUP9jSTzbJqwXiSX5a-Nbze9qHYsoOZbrfQtayvCPibWd3Ojfbo7ZWqbIfUhEX5KBNBko245TSv-4OWT780cdanUaehNxlwYO08YTYI10-_WExMRrQifG8t_vOYY8weW0V4-O_QF/s1600/Screenshot%202026-03-20%203.04.39%20PM.png",
+    exp: "English: Boys 2026 = 950 + 20% = 1140. <br> Girls 2026 = 850 + 10% = 935. <br> Total = 1140 + 935 = 2075. <br><br> Odia: ବାଳକ ୨୦୨୬ = ୯୫୦ + ୨୦% = ୧୧୪୦ | <br> ବାଳିକା ୨୦୨୬ = ୮୫୦ + ୧୦% = ୯୩୫ | <br> ମୋଟ = ୧୧୪୦ + ୯୩୫ = ୨୦୭୫ |"
+  },
+
+    
+  {
+    q: "What is the ratio of the total number of COVID Positive cases in City A and City C together to the total number of Vaccinated people in City B and City D together?<br>ସହର A ଏବଂ ସହର C ର ମୋଟ COVID ପଜିଟିଭ୍ କେସ୍ ଏବଂ ସହର B ଏବଂ ସହର D ର ମୋଟ ଟିକାକରଣ ହୋଇଥିବା ବ୍ୟକ୍ତିଙ୍କ ସଂଖ୍ୟା ମଧ୍ୟରେ ଅନୁପାତ କେତେ?",
+    o: ["11:15", "221:300", "13:20", "17:24"],
+    a: 1,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjo2-QMrxMGh04QzKtrgdwgkMjNGNngyPLP84Vw-OIQd0dOG9HItEDYCbWYfuppvVJm-ZyxiYVTUOsccVJrrN39wfl05HKn7cNehs2XYdfZ-LdvzSQBaInnMQJUiy__-OwU5Ons3Xtujx9CrY4hLzlMNZKl7g42Of-3rX7u4wN1jb1nriYnxw8yz-C-u5rK/s1600/Screenshot%202026-03-20%203.27.00%20PM.png",
+    exp: "English: <br>Positive cases (A+C) = (18% + 16%) of 6.5L = 34% of 6,50,000 = 2,21,000.<br>Vaccinated (B+D) = (15% + 10%) of 12L = 25% of 12,00,000 = 3,00,000.<br>Ratio = 221000 : 300000 = 221 : 300.<br><br>Odia: <br>ପଜିଟିଭ୍ କେସ୍ (A+C) = 6.5L ର 34% = 2,21,000 |<br>ଟିକାକରଣ (B+D) = 12L ର 25% = 3,00,000 |<br>ଅନୁପାତ = 221 : 300 |"
+  },
+  {
+    q: "The number of Vaccinated people in City E is what percent more or less than the number of COVID Positive cases in City D?<br>ସହର E ରେ ଟିକାକରଣ ହୋଇଥିବା ବ୍ୟକ୍ତିଙ୍କ ସଂଖ୍ୟା, ସହର D ର COVID ପଜିଟିଭ୍ କେସ୍ ସଂଖ୍ୟା ଠାରୁ କେତେ ପ୍ରତିଶତ ଅଧିକ କିମ୍ବା କମ୍?",
+    o: ["130.76% more / ଅଧିକ", "115.5% more / ଅଧିକ", "125% more / ଅଧିକ", "142.2% more / ଅଧିକ"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjo2-QMrxMGh04QzKtrgdwgkMjNGNngyPLP84Vw-OIQd0dOG9HItEDYCbWYfuppvVJm-ZyxiYVTUOsccVJrrN39wfl05HKn7cNehs2XYdfZ-LdvzSQBaInnMQJUiy__-OwU5Ons3Xtujx9CrY4hLzlMNZKl7g42Of-3rX7u4wN1jb1nriYnxw8yz-C-u5rK/s1600/Screenshot%202026-03-20%203.27.00%20PM.png",
+    exp: "English: <br>Vaccinated in E = 30% of 12,00,000 = 3,60,000.<br>Positive in D = 24% of 6,50,000 = 1,56,000.<br>Difference = 3,60,000 - 1,56,000 = 2,04,000.<br>Percentage = (2,04,000 / 1,56,000) * 100 = 130.76%.<br><br>Odia: <br>ସହର E ରେ ଟିକାକରଣ = 12,00,000 ର 30% = 3,60,000 |<br>ସହର D ରେ ପଜିଟିଭ୍ = 6,50,000 ର 24% = 1,56,000 |<br>ପାର୍ଥକ୍ୟ = 2,04,000 |<br>ପ୍ରତିଶତ = (2,04,000 / 1,56,000) * 100 = 130.76% |"
+  },
+  {
+    q: "If in City B, the ratio of Vaccinated people who are COVID Positive to those who are COVID Negative is 2:7, find the number of COVID Positive people in City B who are NOT vaccinated.<br>ଯଦି ସହର B ରେ, COVID ପଜିଟିଭ୍ ଥିବା ଟିକାକରଣ ବ୍ୟକ୍ତି ଏବଂ COVID ନେଗେଟିଭ୍ ଥିବା ଟିକାକରଣ ବ୍ୟକ୍ତିଙ୍କ ଅନୁପାତ ୨:୭ ହୁଏ, ତେବେ ସହର B ରେ ଟିକା ନେଇନଥିବା COVID ପଜିଟିଭ୍ ବ୍ୟକ୍ତିଙ୍କ ସଂଖ୍ୟା କେତେ?",
+    o: ["1,03,000", "95,000", "1,15,000", "1,05,000"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjo2-QMrxMGh04QzKtrgdwgkMjNGNngyPLP84Vw-OIQd0dOG9HItEDYCbWYfuppvVJm-ZyxiYVTUOsccVJrrN39wfl05HKn7cNehs2XYdfZ-LdvzSQBaInnMQJUiy__-OwU5Ons3Xtujx9CrY4hLzlMNZKl7g42Of-3rX7u4wN1jb1nriYnxw8yz-C-u5rK/s1600/Screenshot%202026-03-20%203.27.00%20PM.png",
+    exp: "English: <br>Total Vaccinated in B = 15% of 12L = 1,80,000.<br>Vaccinated & Positive = (2/9) * 1,80,000 = 40,000.<br>Total Positive in B = 22% of 6.5L = 1,43,000.<br>Non-Vaccinated Positive = 1,43,000 - 40,000 = 1,03,000.<br><br>Odia: <br>ସହର B ରେ ମୋଟ ଟିକାକରଣ = 1,80,000 |<br>ଟିକାକରଣ ଏବଂ ପଜିଟିଭ୍ = (2/9) * 1,80,000 = 40,000 |<br>ସହର B ରେ ମୋଟ ପଜିଟିଭ୍ = 1,43,000 |<br>ଟିକା ନେଇନଥିବା ପଜିଟିଭ୍ = 1,43,000 - 40,000 = 1,03,000 |"
+  },
+  {
+    q: "Find the difference between the average number of COVID Positive cases in Cities A, B, and E and the average number of Vaccinated people in Cities C and D.<br>ସହର A, B ଏବଂ E ର ହାରାହାରି COVID ପଜିଟିଭ୍ କେସ୍ ଏବଂ ସହର C ଏବଂ D ର ହାରାହାରି ଟିକାକରଣ ବ୍ୟକ୍ତିଙ୍କ ମଧ୍ୟରେ ପାର୍ଥକ୍ୟ ନିର୍ଣ୍ଣୟ କରନ୍ତୁ |",
+    o: ["50,000", "65,000", "55,000", "45,000"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjo2-QMrxMGh04QzKtrgdwgkMjNGNngyPLP84Vw-OIQd0dOG9HItEDYCbWYfuppvVJm-ZyxiYVTUOsccVJrrN39wfl05HKn7cNehs2XYdfZ-LdvzSQBaInnMQJUiy__-OwU5Ons3Xtujx9CrY4hLzlMNZKl7g42Of-3rX7u4wN1jb1nriYnxw8yz-C-u5rK/s1600/Screenshot%202026-03-20%203.27.00%20PM.png",
+    exp: "English: <br>Avg Positive (A,B,E) = (18+22+20)% of 6.5L / 3 = 20% of 6.5L = 1,30,000.<br>Avg Vaccinated (C,D) = (20+10)% of 12L / 2 = 15% of 12L = 1,80,000.<br>Difference = 1,80,000 - 1,30,000 = 50,000.<br><br>Odia: <br>ହାରାହାରି ପଜିଟିଭ୍ (A,B,E) = 1,30,000 |<br>ହାରାହାରି ଟିକାକରଣ (C,D) = 1,80,000 |<br>ପାର୍ଥକ୍ୟ = 50,000 |"
+  },
+  {
+    q: "If the total population of City D is 5,00,000, and the number of people who are neither COVID Positive nor Vaccinated is 2,80,000, find the number of people in City D who are both COVID Positive and Vaccinated.<br>ଯଦି ସହର D ର ମୋଟ ଜନସଂଖ୍ୟା ୫,୦୦,୦୦୦ ଏବଂ COVID ପଜିଟିଭ୍ କିମ୍ବା ଟିକାକରଣ ହୋଇନଥିବା ବ୍ୟକ୍ତିଙ୍କ ସଂଖ୍ୟା ୨,୮୦,୦୦୦ ହୁଏ, ତେବେ ସହର D ରେ ଉଭୟ COVID ପଜିଟିଭ୍ ଏବଂ ଟିକାକରଣ ହୋଇଥିବା ବ୍ୟକ୍ତିଙ୍କ ସଂଖ୍ୟା କେତେ?",
+    o: ["56,000", "44,000", "62,000", "52,000"],
+    a: 0,
+    img: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjo2-QMrxMGh04QzKtrgdwgkMjNGNngyPLP84Vw-OIQd0dOG9HItEDYCbWYfuppvVJm-ZyxiYVTUOsccVJrrN39wfl05HKn7cNehs2XYdfZ-LdvzSQBaInnMQJUiy__-OwU5Ons3Xtujx9CrY4hLzlMNZKl7g42Of-3rX7u4wN1jb1nriYnxw8yz-C-u5rK/s1600/Screenshot%202026-03-20%203.27.00%20PM.png",
+    exp: "English: <br>Total = [Pos + Vac - (Both)] + Neither.<br>5,00,000 = [1,56,000 + 1,20,000 - X] + 2,80,000.<br>5,00,000 = 5,56,000 - X.<br>X = 56,000.<br><br>Odia: <br>ମୋଟ = [ପଜିଟିଭ୍ + ଟିକାକରଣ - (ଉଭୟ)] + କେହି ନୁହେଁ |<br>୫,୦୦,୦୦୦ = [୧,୫୬,୦୦୦ + ୧,୨୦,୦୦୦ - X] + ୨,୮୦,୦୦୦ |<br>X = ୫୬,୦୦୦ |"
+  }
+
+
+
+
+
+
+    
+
+
+
+
+    
+];
+/* ===== End questions with explanations ===== */
+
+let answers={}, index=0, timeLeft, timerInt;
+
+window.onload = () => {
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+  if(saved){
+    if(saved.answers) answers = saved.answers; // restore previous answers
+    showScore(saved);
+  } else {
+    loader.classList.add("hidden");
+    instruction.classList.remove("hidden");
+  }
+};
+
+function startTest(){
+  instruction.classList.add("hidden");
+  test.classList.remove("hidden");
+  timeLeft=TEST_DURATION_MINUTES*60;
+  timerInt=setInterval(runTimer,1000);
+  buildGrid();loadQ();
+}
+
+function runTimer(){
+  if(timeLeft<=0){submitTest();return;}
+  timeLeft--;
+  timer.innerText=`${String(Math.floor(timeLeft/60)).padStart(2,"0")}:${String(timeLeft%60).padStart(2,"0")}`;
+}
+
+function loadQ(){
+  const q = questions[index];
+  question.innerHTML = (index + 1) + ". " + q.q;
+
+  /* ===== IMAGE LOGIC ===== */
+  imgWrap.classList.add("hidden");
+  qImg.style.display = "none";
+  imgLoader.style.display = "block";
+
+  if(q.img){
+    imgWrap.classList.remove("hidden");
+    qImg.src = q.img;
+
+    qImg.onload = () => {
+      imgLoader.style.display = "none";
+      qImg.style.display = "block";
+    };
+
+    qImg.onerror = () => {
+      imgWrap.classList.add("hidden");
+    };
+  }
+
+  options.innerHTML="";
+  q.o.forEach((t,i)=>{
+    const d=document.createElement("div");
+    d.className="option"+(answers[index]===i?" selected":"");
+    d.innerText=t;
+    d.onclick=()=>{
+      answers[index]=answers[index]===i?null:i;
+
+      /* ===== Save answers to localStorage ===== */
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+      saved.answers = answers;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+      /* ===== End save ===== */
+
+      loadQ();
+      updateGrid();
+    };
+    options.appendChild(d);
+  });
+
+  prevBtn.disabled = index === 0;
+  nextBtn.disabled = index === questions.length - 1;
+}
+
+function nextQ(){index++;loadQ();}
+function prevQ(){index--;loadQ();}
+
+function buildGrid(){
+  grid.innerHTML="";
+  questions.forEach((_,i)=>{
+    const d=document.createElement("div");
+    d.innerText=i+1;
+    d.onclick=()=>{index=i;loadQ();};
+    grid.appendChild(d);
+  });
+}
+
+function updateGrid(){
+  [...grid.children].forEach((d,i)=>d.classList.toggle("attempted",answers[i]!=null));
+}
+
+function submitTest(){
+  clearInterval(timerInt);
+  test.classList.add("hidden");
+  loader.classList.remove("hidden");
+  loader.querySelector("p").innerText="Saving score & calculating rank…";
+
+  let correct=0,wrong=0;
+  questions.forEach((q,i)=>{
+    if(answers[i]==null)return;
+    answers[i]===q.a?correct++:wrong++;
+  });
+
+  const score=+(correct-wrong*NEGATIVE_MARK).toFixed(2);
+
+  const baseData={
+    phone:user.phone,
+    name:user.name,
+    score,correct,wrong,
+    unattempted:questions.length-correct-wrong,
+    updatedAt:Date.now()
+  };
+
+  db.collection("tests").doc(TEST_ID).collection("results").doc(user.phone)
+  .set(baseData,{merge:true})
+  .then(()=>calculateRank(baseData));
+}
+
+function calculateRank(myData){
+  db.collection("tests").doc(TEST_ID).collection("results").get()
+  .then(snap=>{
+    const arr=snap.docs.map(d=>({...d.data(),id:d.id}));
+    arr.sort((a,b)=>b.score-a.score);
+    const rank=arr.findIndex(x=>x.id===user.phone)+1;
+    myData.rankText=`${rank} / ${arr.length}`;
+    myData.answers=answers;
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(myData));
+    showScore(myData);
+  });
+}
+
+function showScore(r){
+  loader.classList.add("hidden");
+  score.classList.remove("hidden");
+  userScore.innerText=`Hi ${r.name}, your score is ${r.score}`;
+  stats.innerHTML=`Correct: ${r.correct}<br>Wrong: ${r.wrong}<br>Unattempted: ${r.unattempted}<br><b>Rank: ${r.rankText}</b>`;
+  filterQ("all",document.querySelector(".filter button"));
+}
+
+function filterQ(type,btn){
+  document.querySelectorAll(".filter button").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  review.innerHTML="";
+  questions.forEach((q,i)=>{
+    const a=answers[i];
+    if(type==="correct"&&a!==q.a)return;
+    if(type==="wrong"&&(a==null||a===q.a))return;
+    if(type==="unattempted"&&a!=null)return;
+    const c=document.createElement("div");
+    c.className="card";
+    c.innerHTML=`
+      <b>${q.q}</b><br>
+      Your: ${a!=null?q.o[a]:"—"}<br>
+      Correct: ${q.o[q.a]}<br>
+      <details>
+        <summary>Show Explanation</summary>
+        <p>${q.exp || "No explanation provided."}</p>
+      </details>
+    `;
+    review.appendChild(c);
+  });
+}
+
+function reattempt(){popup.style.display="flex";}
+function confirmReattempt(){localStorage.removeItem(STORAGE_KEY);location.reload();}
+</script>
+</body>
+</html>
